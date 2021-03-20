@@ -94,19 +94,22 @@ NewList <- list("errors"=nested_errors, "mean"=mean(nested_errors))
 return(NewList)}
 
 # Test de autocorrelacines de los residuos
-autocorrelation_test_plot <- function(aug, m = 7, dof = 4, h = 5, alpha = 0.05){
+autocorrelation_test_plot <- function(aug, dof = 4, m = 7,  h = 5, alpha = 0.05){
 vec <- c()
-for (i in seq(m, h*m, m)){
+num_lags = seq(1, h*m)
+
+for (i in num_lags){
  vec <- c(vec,aug %>% features(.resid, ljung_box, lag=i, dof=dof) %>% .$lb_pvalue)
 }
 
 autocorr_pvalues_resid <- tibble(
-  lag = seq(m, h*m, m), 
+  lag = num_lags, 
   p_value = vec,
   incorelated = p_value >= alpha
 )
 
 plot <- autocorr_pvalues_resid %>% 
+  drop_na() %>% 
    ggplot(aes(lag, p_value, color = incorelated)) + 
   geom_point() + 
   geom_hline(aes(yintercept = alpha), linetype="dashed", color = "indianred2")
@@ -114,6 +117,23 @@ plot <- autocorr_pvalues_resid %>%
 
 newList <- list("values" = autocorr_pvalues_resid, "plot" = plot)
 return(newList)
+}
+
+# Autocorrelaciones de los residuos opción 2
+
+resid_corr <- function(modelo, dof_modelo, estacionalidad, show_pvals = TRUE){
+  pvals <- c()
+  for (lag_i in seq(1, 2*estacionalidad)) {
+    pormateau_i <- modelo %>% features(.resid, ljung_box, lag = lag_i, dof = dof_modelo)
+    pvals <- c(pvals, pormateau_i$lb_pvalue)
+    
+  }
+  if (show_pvals) {
+    plot(pvals)
+     abline(0.05, 0)
+  }
+  
+  return(pvals)
 }
 ```
 
@@ -132,11 +152,11 @@ air %>%
     xlab("Year") + ylab("passengers") 
 ```
 
-Dado que tenemos datos mensuales y parece existir a simplevista un patrón estacional anual, reservamos los dos últimos años para test y el resto para train.
+Dado que tenemos datos mensuales y parece existir a simple vista un patrón estacional anual, reservamos el último año para test y el resto para train.
 
 ```{r}
 air_train <- air %>% filter_index(. ~ "1959-12")
-air_test <- air %>% filter_index(1960 ~ .)
+air_test <- air %>% filter_index("1960-01" ~ .)
 ```
 
 # Fase de identificación
@@ -146,7 +166,7 @@ Se comienza la fase de identificación donde se deciden las transformaciones a r
 ## Estacionariedad
 Antes de analizar la serie mediante test estadísticos, analicemos gráficamente más en detalle, para confirmar la estacionalidad detectada.
 
-```{r}
+```{r, warning=FALSE}
 air_train %>%
 gg_season(value, labels = "right")
 ```
@@ -298,23 +318,7 @@ A continuación comprobamos que los residuos están incorrelados.
 aug %>% features(.resid, ljung_box, lag=24, dof=2)
 ```
 ```{r}
-resid_corr <- function(modelo, dof_modelo, estacionalidad, show_pvals = TRUE){
-  pvals <- c()
-  for (lag_i in seq(1, 2*estacionalidad)) {
-    pormateau_i <- modelo %>% features(.resid, ljung_box, lag = lag_i, dof = dof_modelo)
-    pvals <- c(pvals, pormateau_i$lb_pvalue)
-    
-  }
-  if (show_pvals) {
-    plot(pvals)
-     abline(0.05, 0)
-  }
-  
-  return(pvals)
-}
-
-pvals = resid_corr(aug, 2, 12)
-
+pvals = autocorrelation_test_plot(aug, m = 12, dof = 2, h = 2, alpha = 0.05)
 pvals
 ```
 
@@ -332,7 +336,7 @@ log_log <- aug %>% as_tibble() %>%
   
   summary(lm(std_resid~mean_resid, log_log))
 ```
-Como el *p-valor* de *log(media)* es grande, entonces puede considerarse 0 y por tanto los residuos son homocedásticos. 
+Como el *p-valor* de *log(media)* es grande, entonces no se puede considerar distinto de 0 y, por tanto, los residuos son homocedásticos. 
 
 ### Test de normalidad {-}
 
@@ -343,7 +347,7 @@ Para contrastar la normalidad realizamos el test Jarque-Bera para evaluar la nor
 jb.norm.test(na.omit(aug$.resid))
 ```
 
-Como el *p-valor* es menor que el nivel de significancia 0.05, se rechaza la hipótsis nula de normalidad de los resíduos como habíamos supuesto por el histograma.
+Como el *p-valor* es mayor que el nivel de significancia 0.05, se acepta la hipótsis nula de normalidad de los resíduos.
 
 # Fase de predicción
 

@@ -24,7 +24,7 @@ link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
 ```
 
 # Carga de paquetes
@@ -94,19 +94,22 @@ NewList <- list("errors"=nested_errors, "mean"=mean(nested_errors))
 return(NewList)}
 
 # Test de autocorrelacines de los residuos
-autocorrelation_test_plot <- function(aug, m = 7, dof = 4, h = 5, alpha = 0.05){
+autocorrelation_test_plot <- function(aug, dof = 4, m = 7,  h = 5, alpha = 0.05){
 vec <- c()
-for (i in seq(m, h*m, m)){
+num_lags = seq(1, h*m)
+
+for (i in num_lags){
  vec <- c(vec,aug %>% features(.resid, ljung_box, lag=i, dof=dof) %>% .$lb_pvalue)
 }
 
 autocorr_pvalues_resid <- tibble(
-  lag = seq(m, h*m, m), 
+  lag = num_lags, 
   p_value = vec,
   incorelated = p_value >= alpha
 )
 
 plot <- autocorr_pvalues_resid %>% 
+  drop_na() %>% 
    ggplot(aes(lag, p_value, color = incorelated)) + 
   geom_point() + 
   geom_hline(aes(yintercept = alpha), linetype="dashed", color = "indianred2")
@@ -322,7 +325,7 @@ A continuación comprobamos que los residuos están incorrelados.
 
 ```{r}
 # Ljung-Box autocorrelation
-autocorrelation_test_plot(aug, m = 7, dof = 4, h = 5, alpha = 0.05)
+autocorrelation_test_plot(aug, dof = 4, m = 7,  h = 5, alpha = 0.05)
 ```
 
 Los p-valores son menores de 0.05 en la mayoría de las autocorrelaciones. Por lo tanto, NO podemos concluir que los residuos no están correlados.
