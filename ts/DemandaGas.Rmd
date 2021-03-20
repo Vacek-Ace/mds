@@ -25,13 +25,24 @@ link-citations: yes
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Carga de paquetes
+
+```{r}
+
 for (package in c("tidyverse","fpp3", "GGally", "normtest")) {
     if (!require(package, character.only=T, quietly=T)) {
         install.packages(package)
         library(package, character.only=T)
     }
 }
+```
 
+# Funciones auxiliares
+```{r}
+
+# Contraste para los coeficientes
 my_t_test <- function (object, ...) 
 {
   par <- rbind(t_stat=tidy(object)$statistic, p_value=tidy(object)$p.value)
@@ -43,6 +54,7 @@ my_t_test <- function (object, ...)
   }
 }
 
+# Gráfico de correlogramas de residuos
 my_tsresiduals <- function (data, ...) {
   if (!fabletools::is_mable(data)) {
     abort("gg_tsresiduals() must be used with a mable containing only one model.")
@@ -55,30 +67,54 @@ my_tsresiduals <- function (data, ...) {
     ...)
 }
 
-nested_cv <- function(df, h, last_train){
+# Validación cruzada anidada
 
+nested_cv <- function(df, h, last_train, string_formula){
+  
   nested_errors <- vector()  
-
+  
 for (i in seq(last_train, last(df$date), h)){
-
   train <- df %>% filter(date<=i)
   test <- df %>% filter(date>i)
   
-fit4 <- train %>%
-  model(arima = ARIMA(value ~ pdq(0,1,2) + PDQ(1,1,1)))
+fitted_model <- train %>%
+  model(arima = ARIMA(as.formula(string_formula)))
 
 h_forecast = min(dim(test)[1], h)
 
-fc <- fit4 %>%
+fc <- fitted_model %>%
   forecast(h=h_forecast)
 
 test_err <- fc %>%
   accuracy(test) %>%
   select(MAPE)
 nested_errors <- c(nested_errors, test_err$MAPE)
+NewList <- list("errors"=nested_errors, "mean"=mean(nested_errors))
 }
-return(mean(nested_errors))}
+return(NewList)}
 
+# Test de autocorrelacines de los residuos
+autocorrelation_test_plot <- function(aug, m = 7, dof = 4, h = 5, alpha = 0.05){
+vec <- c()
+for (i in seq(m, h*m, m)){
+ vec <- c(vec,aug %>% features(.resid, ljung_box, lag=i, dof=dof) %>% .$lb_pvalue)
+}
+
+autocorr_pvalues_resid <- tibble(
+  lag = seq(m, h*m, m), 
+  p_value = vec,
+  incorelated = p_value >= alpha
+)
+
+plot <- autocorr_pvalues_resid %>% 
+   ggplot(aes(lag, p_value, color = incorelated)) + 
+  geom_point() + 
+  geom_hline(aes(yintercept = alpha), linetype="dashed", color = "indianred2")
+
+
+newList <- list("values" = autocorr_pvalues_resid, "plot" = plot)
+return(newList)
+}
 ```
 
 # División train y test
@@ -86,6 +122,7 @@ return(mean(nested_errors))}
 Antes de empezar a hacer el estudio hay que distinguir la parte de los datos que se utilizará para construir la fórmula (para modelizar) de aquella que se utilizará para validar los resultados y cuyos datos, no deben ser utilizados.
 
 Convertimos la serie en un objeto **tsibble**, para trabajar de manera cómoda. Analizamos visualmente la serie y las marcas de tiempo para saber cómo dividir los datos.
+
 
 ```{r}
 
@@ -99,7 +136,7 @@ demandaGas %>%
     xlab("Year") + ylab("value") 
 ```
 
-Dado que tenemos datos mensuales y parece existir a simplevista un patrón estacional anual, reservamos los dos últimos años para test y el resto para train.
+Dado que tenemos datos mensuales y parece existir a simple vista un patrón estacional anual, reservamos los dos últimos años para test y el resto para train.
 
 ```{r}
 demandaGas_train <- demandaGas %>% filter_index(. ~ "1999-06-30")
@@ -129,7 +166,7 @@ demandaGas_train %>%
   autoplot()
 ```
 
-Se confirma visualmente las estacionalidades supuestas. Además de la tendencia creciente. Por tanto, parece que la serie no va a ser estacionaria en media. Como era de esperar.
+Se confirman visualmente las estacionalidades supuestas. Además de la tendencia creciente. Por tanto, parece que la serie no va a ser estacionaria en media. Como era de esperar.
 
 ### Estacionariedad en varianza {-}
 
@@ -150,7 +187,7 @@ Es evidente que se necesita realizar al menos una diferencia para estabilizar la
 
 ```{r}
 demandaGas_train %>%
-  features(log(value), unitroot_kpss)
+  features(value, unitroot_kpss)
 ```
 
 El p-valor es menor que 0.05, lo que indica que la hipótesis nula es rechazada. Es decir, los datos no son estacionarios. Se confirma formalmente que los datos no son estacionarios. 
@@ -183,7 +220,7 @@ En los pasos previos hemos detectado la necesidad de realizar una diferencia reg
 ```{r}
 fit <- demandaGas_train %>%
   model(arima = ARIMA(value ~ pdq(0,1,0) + PDQ(0,1,0, period = 7)))
-fit %>% my_tsresiduals(lag_max =36)
+fit %>% my_tsresiduals(lag_max = 36)
 ```
 
 El nuevo gráfico acf corresponde a un AR(7). Se aprecia estructura multiplicativa. Es decir, un AR(1) estacional de periodo 7.
@@ -194,7 +231,7 @@ El nuevo gráfico acf corresponde a un AR(7). Se aprecia estructura multiplicati
 Comencemos ajustando la parte estacional mediante un SARIMA (0,1,0)x(1,1,0)$_{7}$
 ```{r}
 fit2 <- demandaGas_train %>%
-  model(arima = ARIMA(value ~ pdq(0,1,0) + PDQ(1,1,0, period= 7)))
+  model(arima = ARIMA(value ~ pdq(0,1,0) + PDQ(1,1,0, period=7)))
 fit2 %>% my_tsresiduals(lag_max =36)
 ```
 
@@ -211,7 +248,7 @@ Siguen existiendo autocorrelaciones fuertes de orden 7. Por tanto, ajustaremos u
 
 ```{r}
 fit3 <- demandaGas_train %>%
-  model(arima = ARIMA(value ~ pdq(0,1,0) + PDQ(1,1,1)))
+  model(arima = ARIMA(value ~ pdq(0,1,0) + PDQ(1,1,1, period=7)))
 fit3 %>% my_tsresiduals(lag_max =36)
 ```
 
@@ -237,8 +274,22 @@ fit4 %>% my_tsresiduals(lag_max =36)
 report(fit4)
 my_t_test(fit4)
 ```
+No es posible identificar más estructura a partir del ACF y PACF, no hay problemas de estacionariedad o invertibilidad. Además, todos los coeficientes son significativos. Aunque algunas de las autocorrelaciones se siguen saliendo de las bandas. 
 
-No es posible identificar más estructura a partir del ACF y PACF, no hay problemas de estacionariedad o invertibilidad. Además, todos los coeficientes son significativos. Aunque algunas de las autocorrelaciones se siguen saliendo de las bandas. Procedemos al análisis de los residuos del modelo.
+NOTA: Hay un aspecto que pasa inadvertido por la propia construcción del paquete empleado. No se ha evaluado la posibilidad de incluir una constante en el modelo. Esto es, porque al no pasar el t-test en ningún modelo evaluado directamente no se calcula. Para incluir esta constate y poder comprobarlo, simplemente incluímos "+1" en la fórmula del ARIMA. 
+
+```{r}
+fit5 <- demandaGas_train %>%
+  model(arima = ARIMA(value ~ pdq(0,1,2) + PDQ(1,1,1) + 1))
+fit5 %>% my_tsresiduals(lag_max =36)
+```
+```{r}
+report(fit5)
+my_t_test(fit5)
+```
+
+Se aprecia que no podemos rechazar la hipótesis de que la constante sea nula, por tanto nos quedamos con el modelo anterior sin constante. Procedemos al análisis de los residuos del modelo SARIMA (0,1,2)x(1,1,1)$_{7}$.
+
 
 ## Diagnosis de residuos
 
@@ -270,11 +321,11 @@ Como *p-value* > 0.05 no podemos rechazar la hipótesis de que la muestra tiene 
 A continuación comprobamos que los residuos están incorrelados.
 
 ```{r}
-# Ljung-Box autocorrelation lag=2*m
-aug %>% features(.resid, ljung_box, lag=14, dof=4)
+# Ljung-Box autocorrelation
+autocorrelation_test_plot(aug, m = 7, dof = 4, h = 5, alpha = 0.05)
 ```
 
-Los resultados no son significativos (es decir, el *p-valor* es relativamente grande). Por lo tanto, NO podemos concluir que los residuos no están correlados.
+Los p-valores son menores de 0.05 en la mayoría de las autocorrelaciones. Por lo tanto, NO podemos concluir que los residuos no están correlados.
 
 ### Test homocedasticidad {-}
 
@@ -288,7 +339,7 @@ log_log <- aug %>% as_tibble() %>%
   
   summary(lm(std_resid~mean_resid, log_log))
 ```
-Como el *p-valor* de *log(media)* es grande, entonces puede considerarse 0 y por tanto los residuos son homocedásticos. 
+Como el *p-valor* de *log(media)* es grande, entonces no puede considerarse distinto de 0 y por tanto los residuos son homocedásticos. 
 
 ### Test de normalidad {-}
 
@@ -309,7 +360,7 @@ Finalmente evaluamos la capacidad predictiva del modelo. Calculamos las predicci
 # Residual accuracy
 resids <- fit4 %>% 
   accuracy() %>% 
-  select(-c(.model, .type, ME, MPE, ACF1 )) %>% 
+  select(-c(.model, .type, ME, MPE, ACF1, RMSSE)) %>% 
   mutate(Evaluation='Training') 
 
 # Forecasting
@@ -318,7 +369,7 @@ fc <- fit4 %>%
 
 test_err <- fc %>% 
   accuracy(demandaGas) %>% 
-  select(-c(.model, .type, ME, MPE, ACF1 )) %>% 
+  select(-c(.model, .type, ME, MPE, ACF1, RMSSE)) %>% 
   mutate(Evaluation='Test')
 
 # Show errors together
@@ -369,7 +420,8 @@ Como sabemos que los modelos SARIMA no predicen bien más alla del orden más al
 A continuación, se muestra el error medio en ventanas deslizantes de tamaño 7 sin solapamiento.
 
 ```{r}
-nested_av_errors <- nested_cv(demandaGas, 7, last(demandaGas_train$date))
+
+nested_av_errors <- nested_cv(demandaGas, 7, last(demandaGas_train$date), "value ~ pdq(0,1,2) + PDQ(1,1,1)")
 nested_av_errors
 ```
 
