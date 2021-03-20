@@ -1,0 +1,340 @@
+---
+title: "Exercise solutions: Section 9.7"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+>  Consider monthly sales and advertising data for an automotive parts company (data set `advert`).
+
+> a.  Plot the data using `autoplot`. Why is it useful to set `facets=TRUE`?
+
+```{r}
+autoplot(advert, facets=TRUE)
+```
+
+Because the data are on different scales, they should not be plotted in the same panel. Setting `facets=TRUE` puts them in different panels.
+
+> b. Fit a standard regression model $y_t = a + b x_t + \eta_t$ where $y_t$ denotes sales and $x_t$ denotes advertising using the `tslm()` function.
+
+```{r}
+(fit <- tslm(sales ~ advert, data=advert))
+```
+
+> c. Show that the residuals have significant autocorrelation.
+
+```{r}
+checkresiduals(fit)
+```
+
+> d. What difference does it make if you use the `Arima` function instead:
+
+```{r}
+Arima(advert[,'sales'], xreg=advert[,'advert'], order=c(0,0,0))
+```
+
+The model is identical.
+
+> e. Refit the model using `auto.arima()`. How much difference does the error model make to the estimated parameters? What ARIMA model for the errors is selected?
+
+```{r}
+(fit <- auto.arima(advert[,'sales'], xreg=advert[,'advert']))
+```
+
+There is first order differencing, so the intercept disappears. The advert coefficient has changed a little. The error model is ARIMA(0,1,0).
+
+> f. Check the residuals of the fitted model.
+
+```{r}
+checkresiduals(fit)
+```
+
+All good.
+
+> g. Assuming the advertising budget for the next six months is exactly 10 units per month, produce sales forecasts with prediction intervals for the next six months.
+
+```{r}
+(fc <- forecast(fit, xreg=matrix(rep(10,6))))
+autoplot(fc) + xlab("Month") + ylab("Sales")
+```
+
+# Ex 2
+>  This exercise uses data set `huron` giving the level of Lake Huron from 1875--1972.
+> a. Fit a piecewise linear trend model to the Lake Huron data with a knot at 1920 and an ARMA error structure.
+
+```{r}
+trend <- time(huron)
+trend2 <- pmax(trend-1920, 0)
+fit <- auto.arima(huron, xreg=cbind(trend,trend2))
+```
+
+> b. Forecast the level for the next 30 years.
+
+```{r}
+trend <- max(time(huron)) + seq(30)
+trend2 <- trend-1920
+fc <- forecast(fit,xreg=cbind(trend,trend2))
+autoplot(fc) +
+  autolayer(huron - residuals(fit, type='regression'), series="Fitted trend")
+```
+
+# Ex 3
+> This exercise concerns `motel`: the total monthly takings from accommodation and the total room nights occupied at hotels, motels, and guest houses in Victoria, Australia, between January 1980 and June 1995. Total monthly takings are in thousands of Australian dollars; total room nights occupied are in thousands.
+
+> a. Use the data to calculate the average cost of a night's accommodation in Victoria each month.
+
+```{r}
+avecost <- motel[,"Takings"] / motel[,"Roomnights"]
+```
+
+> b. Use `cpimel` to estimate the monthly CPI.
+
+`cpimel` contains quarterly CPI values. We can use linear approximation to interpolate the quarterly data to obtain monthly CPI.
+
+```{r}
+qcpi <- ts(approx(time(cpimel), cpimel, time(motel), rule=2)$y,
+  start=start(motel), frequency=frequency(motel))
+```
+
+> c. Produce time series plots of both variables and explain why logarithms of both variables need to be taken before fitting any models.
+
+```{r}
+autoplot(cbind(avecost, qcpi), facets=TRUE)
+```
+
+We expect avecost to be related to CPI, but the variance of average cost increases with the level. So logs will help. Also, average cost is likely to be a multiple of CPI as it will depend on lots of individual costs, each of which will increase with CPI. So logarithms will turn the multiplicative relationship into something additive which we can model.
+
+```{r}
+autoplot(log(cbind(avecost, qcpi)), facets=TRUE)
+```
+
+> d. Fit an appropriate regression model with ARIMA errors. Explain your reasoning in arriving at the final model.
+
+```{r}
+(fit <- auto.arima(avecost, xreg=log(qcpi), lambda=0, biasadj=TRUE))
+```
+
+> e. Forecast the average price per room for the next twelve months using your fitted model. (Hint: You will need to produce forecasts of the CPI figures first.)
+
+We will use an ARIMA model for CPI:
+
+```{r}
+fitcpi <- auto.arima(qcpi)
+fccpi <- forecast(fitcpi, h=12)
+autoplot(fccpi)
+```
+
+Now we can forecast average cost
+
+```{r}
+fc <- forecast(fit, xreg=log(fccpi$mean))
+autoplot(fc)
+```
+
+# Ex 4
+> Consider the `gasoline` series.
+
+> a. Using `tslm`, fit a harmonic regression with a piecewise linear time trend to the full `gasoline` series. Select the position of the knots in the trend and the appropriate number of Fourier terms to include by minimizing the AICc or CV value.
+
+Let's optimize using 2 break points and an unknown number of Fourier terms. Because the number of Fourier terms is integer, we can't just use `optim`. So we will use `optim` for the breakpoints but then loop over the Fourier terms.
+
+```{r}
+getcv <- function(breaks, K) {
+  trend2 <- pmax(seq_along(gasoline) - breaks[1], 0)
+  trend3 <- pmax(seq_along(gasoline) - breaks[2], 0)
+  harmonics <- fourier(gasoline, K=K)
+  fit <- tslm(gasoline ~ harmonics + trend + trend2 + trend3)
+  return(CV(fit)[1])
+}
+cvk <- numeric(25)
+for(k in seq(25))
+  cvk[k] <- optim(c(800,1100), getcv, K=k)$value
+K <- which.min(cvk)
+# Best breaks
+(breaks <- optim(c(800,1100), getcv, K=K)$par)
+trend2 <- pmax(seq_along(gasoline) - breaks[1], 0)
+trend3 <- pmax(seq_along(gasoline) - breaks[2], 0)
+harmonics <- fourier(gasoline, K=K)
+fit <- tslm(gasoline ~ harmonics + trend + trend2 + trend3)
+```
+
+> b. Now refit the model using `auto.arima` to allow for correlated errors, keeping the same predictor variables as you used with `tslm`.
+
+```{r}
+trend <- seq_along(gasoline)
+fit <- auto.arima(gasoline, xreg=cbind(trend,trend2,trend3,harmonics), seasonal=FALSE)
+```
+
+> c. Check the residuals of the final model using the `checkresiduals()` function. Do they look sufficiently like white noise to continue? If not, try modifying your model, or removing the first few years of data.
+
+```{r}
+checkresiduals(fit)
+```
+
+It fails the test, but the correlations are tiny, and I'm happy to use that model.
+
+> d. Once you have a model with white noise residuals, produce forecasts for the next year.
+
+```{r}
+trend <- length(gasoline) + seq(52)
+trend2 <- length(gasoline) - breaks[1] + seq(52)
+trend3 <- length(gasoline) - breaks[2] + seq(52)
+harmonics <- fourier(gasoline, K=K, h=52)
+fc <- forecast(fit, xreg=cbind(trend,trend2,trend3,harmonics))
+autoplot(fc)
+```
+
+# Ex 5
+
+>Electricity consumption is often modelled as a function of temperature. Temperature is measured by daily heating degrees and cooling degrees. Heating degrees is $18^\circ$C minus the average daily temperature when the daily average is below $18^\circ$C; otherwise it is zero.  This provides a measure of our need to heat ourselves as temperature falls.  Cooling degrees measures our need to cool ourselves as the temperature rises.  It is defined as the average daily temperature minus $18^\circ$C when the daily average is above $18^\circ$C; otherwise it is zero.
+
+>Let $y_t$ denote the monthly total of kilowatt-hours of electricity used, let $x_{1,t}$ denote the monthly total of heating degrees, and let $x_{2,t}$ denote the monthly total of cooling degrees.
+
+>An analyst fits the following model to a set of such data:
+$$
+  y^*_t = \beta_1x^*_{1,t} + \beta_2x^*_{2,t} + \eta_t,
+$$
+where
+$$
+  (1-B)(1-B^{12})\eta_t = \frac{1-\theta_1 B}{1-\phi_{12}B^{12} - \phi_{24}B^{24}}\varepsilon_t
+$$
+and $y^*_t = \log(y_t)$, $x^*_{1,t} = \sqrt{x_{1,t}}$ and $x^*_{2,t}=\sqrt{x_{2,t}}$.
+
+> a. What sort of ARIMA model is identified for $\eta_t$?
+
+ARIMA(0,1,1)(2,1,0)$_{12}$
+
+> b. The estimated coefficients are
+
+> |Year              | 1964| 1965| 1966| 1967| 1968|
+> |:-----------------|----:|----:|----:|----:|----:|
+> |Millions of tons  | 467 | 512 | 534 | 552 | 545 |
+>
+> | Parameter   | Estimate   | s.e.       | $Z$        | $P$-value  |
+> | :---------- | :--------: | :--------: | :--------: | :--------: |
+> | $\beta_1$       | 0.0077     | 0.0015     | 4.98       | 0.000      |
+> | $\beta_2$       | 0.0208     | 0.0023     | 9.23       | 0.000      |
+> | $\theta_1$  | 0.5830     | 0.0720     | 8.10       | 0.000      |
+> | $\phi_{12}$ | -0.5373    | 0.0856     | -6.27      | 0.000      |
+> | $\phi_{24}$ | -0.4667    | 0.0862     | -5.41      | 0.000      |
+>
+> Explain what the estimates of $\beta_1$ and $\beta_2$ tell us about electricity consumption.
+
+$\hat{\beta}_1$ is the unit increase in $y_t^*$ when $x_{1,t}^*$ increases by 1.  This is a little hard to interpret, but it is clear that monthly total electricity usage goes up when monthly heating degrees goes up. Similarly, for $\hat{\beta}_2$, monthly total electricty usage goes up when monthly cooling degrees goes up.
+
+> c. Write the equation in a form more suitable for forecasting.
+
+This turned out to be way more messy than I expected, but for what it's worth, here it is in all its ugliness.
+
+First apply the differences to the regression equation.
+$$
+(1-B)(1-B^{12}) y_t^* = \beta_1^*(1-B)(1-B^{12})x_{1,t}^* + \beta_2^*(1-B)(1-B^{12})x_{2,t}^* + (1-B)(1-B^{12})\eta_{t}
+$$
+So
+\begin{align*}
+(y^*_{t} - y^*_{t-1} - y^*_{t-12} +y^*_{t-13})
+ =& \beta_1(x^*_{1,t} - x^*_{1,t-1} - x^*_{1,t-12} + x^*_{1,t-13})
+ + \beta_2(x^*_{2,t} - x^*_{2,t-1} - x^*_{2,t-12} + x^*_{2,t-13}) \\
+ & + \frac{1-\theta_1B}{1-\phi_{12}B^{12}-\phi_{24}B^{24}}\varepsilon_t.
+\end{align*}
+Multiplying by the AR polynomial gives
+\begin{align*}
+(y^*_{t} & - y^*_{t-1} - y^*_{t-12} +y^*_{t-13})
+-\phi_{12}(y^*_{t-12} - y^*_{t-13} - y^*_{t-24} +y^*_{t-25})
+-\phi_{24}(y^*_{t-24} - y^*_{t-25} - y^*_{t-36} +y^*_{t-37})\\
+ = & \beta_1(x^*_{1,t} - x^*_{1,t-1} - x^*_{1,t-12} + x^*_{1,t-13})
+ -\phi_{12}\beta_1(x^*_{1,t-12} - x^*_{1,t-13} - x^*_{1,t-24} + x^*_{1,t-25})
+ -\phi_{24}\beta_1(x^*_{1,t-24} - x^*_{1,t-25} - x^*_{1,t-36} + x^*_{1,t-37}) \\
+ & + \beta_2(x^*_{2,t} - x^*_{2,t-1} - x^*_{2,t-12} + x^*_{2,t-13})
+  - \phi_{12}\beta_2(x^*_{2,t-12} - x^*_{2,t-13} - x^*_{2,t-24} + x^*_{2,t-25})
+  - \phi_{24}\beta_2(x^*_{2,t-24} - x^*_{2,t-25} - x^*_{2,t-36} + x^*_{2,t-37}) \\
+ &  + \varepsilon_t - \theta_1 \varepsilon_{t-1}.
+\end{align*}
+Finally, we move all but $y_t^*$ to the right hand side:
+\begin{align*}
+y^*_{t} =  & y^*_{t-1} + y^*_{t-12} - y^*_{t-13}
++\phi_{12}(y^*_{t-12} - y^*_{t-13} - y^*_{t-24} +y^*_{t-25})
++\phi_{24}(y^*_{t-24} - y^*_{t-25} - y^*_{t-36} +y^*_{t-37})\\
+ & + \beta_1(x^*_{1,t} - x^*_{1,t-1} - x^*_{1,t-12} + x^*_{1,t-13})
+ -\phi_{12}\beta_1(x^*_{1,t-12} - x^*_{1,t-13} - x^*_{1,t-24} + x^*_{1,t-25})
+ -\phi_{24}\beta_1(x^*_{1,t-24} - x^*_{1,t-25} - x^*_{1,t-36} + x^*_{1,t-37}) \\
+ & + \beta_2(x^*_{2,t} - x^*_{2,t-1} - x^*_{2,t-12} + x^*_{2,t-13})
+  - \phi_{12}\beta_2(x^*_{2,t-12} - x^*_{2,t-13} - x^*_{2,t-24} + x^*_{2,t-25})
+  - \phi_{24}\beta_2(x^*_{2,t-24} - x^*_{2,t-25} - x^*_{2,t-36} + x^*_{2,t-37}) \\
+ &  + \varepsilon_t - \theta_1 \varepsilon_{t-1}.
+\end{align*}
+
+> d. Describe how this model could be used to forecast electricity demand for the next 12 months.
+
+For $t=T+1$, we use the above equation to find a point forecast of $y_{T+1}^*$, setting $\varepsilon_{T+1}=0$ and $\hat{\varepsilon}_T$ to the last residual. The actual $y_t^*$ values are all known, as are all the $x_{1,t}^*$ and $x_{2,t}^*$ values up to time $t=T$. For $x_{1,T+1}^*$ and $x_{2,T+1}^*$, we could use a forecast (for example, a seasonal naïve forecast).
+
+For $t=T+2,\dots,T+12$, we do something similar, but both $e$ values are set to 0 and $y^*_{T+k}$ ($k\ge1$) is replaced by the forecasts just calculated.
+
+> e. Explain why the $\eta_t$ term should be modelled with an ARIMA model rather than modeling the data using a standard regression package.  In your discussion, comment on the properties of the estimates, the validity of the standard regression results, and the importance of the $\eta_t$ model in producing forecasts.
+
+* The non-stationarity of $\eta_t$ means the coefficients in the regression model will be inconsistent if OLS is used.
+* The standard errors will be incorrectly computed.
+* Which means all the p-values will be wrong.
+* Using an ARIMA structure for $\eta_t$ allows these problems to be corrected, plus the short-term forecasts will be more accurate.
+
+# Ex 6
+
+> For the retail time series considered in earlier chapters:
+> a. Develop an appropriate dynamic regression model with Fourier terms for the seasonality. Use the AIC to select the number of Fourier terms to include in the model. (You will probably need to use the same Box-Cox transformation you identified previously.)
+ 
+```{r retail}
+retaildata <- readxl::read_excel("data/retail.xlsx", skip=1)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+
+# Function to find K
+getaicc <- function(K) {
+  harmonics <- fourier(myts, K=K)
+  fit <- try(auto.arima(myts, xreg=harmonics, lambda=0))
+  if("try-error" %in% class(fit))
+    return(Inf)
+  else
+    return(fit[['aicc']])
+}
+aicck <- numeric(6)
+for(k in seq(6))
+  aicck[k] <- getaicc(k)
+harmonics <- fourier(myts, K=which.min(aicck))
+(fit <- auto.arima(myts, xreg=harmonics, lambda=0))
+```
+
+All possible Fourier terms are included (i.e., $K=6$).
+
+> b. Check the residuals of the fitted model. Does the residual series look like white noise?
+
+```{r retailres, dependson="retail"}
+checkresiduals(fit)
+```
+
+Some serial correlation remains. That will inflate my prediction intervals a little.
+
+
+> c. Compare the forecasts with those you obtained earlier using alternative models.
+
+```{r retailf, dependson='retail'}
+fc <- forecast(fit, xreg=fourier(myts, K=which.min(aicck), h=36))
+autoplot(fc)
+```
+
+That looks fairly similar to forecasts obtained earlier. To properly compare them, we would need to use a training/test set, or use time series cross-validation.
+

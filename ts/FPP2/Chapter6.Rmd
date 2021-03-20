@@ -1,0 +1,242 @@
+---
+title: "Exercise solutions: Section 6.9"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+
+> Show that a $3\times 5$ MA is equivalent to a 7-term weighted moving average with weights of 0.067, 0.133, 0.200, 0.200, 0.200, 0.133, and 0.067.
+
+5-term moving average:
+$$z_j = \frac{1}{5}(y_{j-2}+y_{j-1}+y_j+y_{j+1}+y_{j+2}).$$
+3-term moving average:
+$$u_t = \frac{1}{3}(z_{t-1}+z_t+z_{t+1}).$$
+Substituting expression for $z_j$ into the latter formula we get
+\begin{align*}
+u_t &= \frac{1}{3}\left(\frac{1}{5}\left(y_{t-3}+y_{t-2}+y_{t-1}+y_{t}+y_{t+1}\right)+\frac{1}{5}\left(y_{t-2}+y_{t-1}+y_t+y_{t+1}+y_{t+2}\right)+\frac{1}{5}\left(y_{t-1}+y_{t}+y_{t+1}+y_{t+2}+y_{t+3}\right)\right).\\
+&= \frac{1}{15}\left(y_{t-3}+2y_{t-2}+3y_{t-1}+3y_{t}+3y_{t+1}+2y_{t+2}+y_{t+3}\right),
+\end{align*}
+which is a 7-term weighted moving average with weights of 0.067, 0.133, 0.200, 0.200, 0.200, 0.133, and 0.067
+
+# Ex 2
+
+> The `plastics` data set consists of the monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+>  a. Plot the time series of sales of product A. Can you identify seasonal fluctuations and/or a trend-cycle?
+
+```{r}
+autoplot(plastics) + ylab("Sales of product A")
+```
+
+Seasonal fluctuations have smooth roughly sinusoidal shape. The data has an upward trend which is close to linear.
+
+>  b. Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+    
+```{r}
+fit <- decompose(plastics, type='multiplicative')
+autoplot(fit)
+```
+
+> c. Do the results support the graphical interpretation from part a?
+
+The results partially support the earlier conclusions. The trend appears to be nonlinear in the beginning and in the end.
+
+> d. Compute and plot the seasonally adjusted data.
+
+```{r}
+fit %>% seasadj() %>%
+  autoplot() + ylab("Seasonally adjusted data")
+```
+
+Again, this makes the non-linear nature of the trend much more obvious.
+
+> e. Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+```{r}
+plastics2 <- plastics
+plastics2[31] <- plastics2[31] + 500
+fit2 <- decompose(plastics2, type="multiplicative")
+autoplot(fit2)
+fit2 %>% seasadj() %>%
+  autoplot() + ylab("Seasonally adjusted data")
+```
+
+The outlier appears partially in the seasonally adjusted data; the jump is only about 250, not 500. The seasonal component has also absorbed some of the outlier, and so the seasonally adjusted data has a dip in the 6th month of all other years.
+
+>  f. Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+```{r}
+plastics3 <- plastics
+plastics3[59] <- plastics3[59] + 500
+fit3 <- decompose(plastics3, type="multiplicative")
+autoplot(fit3)
+fit3 %>% seasadj() %>%
+  autoplot() + ylab("Seasonally adjusted data")
+```
+
+The outlier is now in the second last observation. It appears in the seasonally adjusted data almost completely (a jump of nearly 500).
+
+In this example, an outlier at the end of the data affects the seasonal pattern less than when it is in the middle of the time series. This is because the seasonal component is only estimated from the observations where a trend has been computed, which excludes the ends.
+
+# Ex 3
+
+> Recall your retail time series data  (from Exercise 3 in Section 2.10). Decompose the series using X11. Does it reveal any outliers, or unusual features that you had not noticed previously?
+
+```{r}
+readxl::read_excel("data/retail.xlsx", skip=1)[,"A3349873A"] %>%
+  ts(frequency=12, start=c(1982,4)) %>%
+  seasonal::seas(x11="") %>% 
+  autoplot() + ggtitle("X11 decomposition of retail data")
+``` 
+
+There is a relatively large outlier in 2000 which was not obvious before, and the seasonal pattern near the end is reducing in size.
+
+# Ex 4
+
+> Figures 6.16 and 6.17 show the result of decomposing the number of persons in the civilian labor force in Australia each month from February 1978 to August 1995.
+>
+> a. Write about 3--5 sentences describing the results of the seasonal adjustment.  Pay particular attention to the scales of the graphs in making your interpretation.
+
+* The data has steady upward trend with a small dip around 1991/1992 years.
+* The data has rather strong and complicated seasonal pattern which changes a little over time. December is the highest employment month, followed by March and September.
+* The seasonal component changes mostly in March, then, in decreasing order, in September, April and December. (March has decreased in recent years, while December has increased.)
+
+> b. Is the recession of 1991/1992 visible in the estimated components?
+
+* The recession of 1991/1992 is particularly visible in the  remainder component, but not in the other components.
+
+# Ex 5
+>This exercise uses the `cangas` data (monthly Canadian gas production in billions of cubic metres, January 1960 -- February 2005).
+
+>    a. Plot the data using `autoplot`, `ggsubseriesplot` and `ggseasonplot` to look at the effect of the changing seasonality over time. What do you think is causing it to change so much?
+
+```{r}
+autoplot(cangas)
+ggsubseriesplot(cangas)
+ggseasonplot(cangas)
+```
+
+The seasonality has much larger fluctuations in the 1980s than in other decades. This is possibly due to changing heating technology.
+
+>  b. Do an STL decomposition of the data. You will need to choose `s.window` to allow for the changing shape of the seasonal component.
+
+```{r}
+decomp <- stl(cangas, s.window=9)
+autoplot(decomp)
+```
+
+> c. Compare the results with those obtained using SEATS and X11. How are they different?
+
+```{r}
+cangas %>% seasonal::seas() %>% autoplot() + ggtitle("SEATS decomposition")
+cangas %>% seasonal::seas(x11="") %>% autoplot() + ggtitle("X11 decomposition")
+```
+
+These are multiplicative decompositions, whereas STL is an additive decomposition. Consequently, the seasonal components are quite different. Also, the trend term for these is substantially more wiggly than for an STL decomposition. 
+
+# Ex 6
+>We will use the `bricksq` data (Australian quarterly clay brick production. 1956–1994) for this exercise.
+
+>    a. Use an STL decomposition to calculate the trend-cycle and seasonal indices. (Experiment with having fixed or changing seasonality.)
+
+There's some change in variation, and `BoxCox.lambda(bricksq)` gives a value of 0.25.
+
+```{r}
+y <- BoxCox(bricksq, lambda=0.25)
+fit <- stl(y, s.window='periodic')
+autoplot(fit)
+```
+
+The seasonality looks fairly stable, so I've used a periodic `s.window`.
+
+
+>    b. Compute and plot the seasonally adjusted data.
+
+```{r}
+fit %>% seasadj() %>% autoplot()
+```
+
+>    c. Use a naïve method to produce forecasts of the seasonally adjusted data.
+
+```{r}
+fit %>% seasadj() %>% naive() %>% autoplot()
+
+```
+
+>    d. Use `stlf` to reseasonalize the results, giving forecasts for the original data.
+
+```{r}
+fc <- stlf(bricksq, s.window='periodic', method='naive', lambda=0.25)
+autoplot(fc)
+```
+
+>    e. Do the residuals look uncorrelated?
+
+```{r}
+checkresiduals(fc)
+```
+
+Not too bad, but some small autocorrelation remaining.
+
+>    f. Repeat with a robust STL decomposition. Does it make much difference?
+
+```{r}
+fc <- stlf(bricksq, s.window='periodic', method='naive', lambda=0.25, robust=TRUE)
+autoplot(fc)
+checkresiduals(fc)
+```
+
+It makes very little difference here as there aren't any major outliers, and those that are there are not near the end of the series.
+
+>    g. Compare forecasts from `stlf` with those from `snaive`, using a test set comprising the last 2 years of data. Which is better?
+
+```{r}
+bricks1 <- window(bricksq, end = c(1987,4))
+fc1 <- stlf(bricks1, s.window='periodic', method='naive', lambda=0.25)
+fc2 <- snaive(bricks1)
+accuracy(fc1, bricksq)
+accuracy(fc2, bricksq)
+```
+
+`snaive` does better here, although this is based on a test set of only 8 observations.
+
+
+# Ex 7
+>Use `stlf` to produce forecasts of the `writing` series with either `method="naive"` or `method="rwdrift"`, whichever is most appropriate. Use the `lambda` argument if you think a Box-Cox transformation is required.
+
+There is an upward trend in the data, so I will use `method="rwdrift"`. There's not much change in variability, so I won't use a Box-Cox transformation.
+
+```{r}
+fc <- stlf(writing, method='rwdrift')
+autoplot(fc)
+```
+
+
+# Ex 8
+>Use `stlf` to produce forecasts of the `fancy` series with either `method="naive"` or `method="rwdrift"`, whichever is most appropriate. Use the `lambda` argument if you think a Box-Cox transformation is required.
+
+
+There is an upward trend in the data, so I will use `method="rwdrift"`. There's a strong change in variation, and `BoxCox.lambda(fancy)` gives a value close to zero. That seems a bit strong, so I've chosen 0.2.
+
+```{r}
+fc <- stlf(fancy, method='rwdrift', lambda=0.2)
+autoplot(fc)
+```
+
+

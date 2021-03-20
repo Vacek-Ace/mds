@@ -1,0 +1,319 @@
+---
+title: "Otros modelos para datos longitudinales"
+author: "Felipe Ortega"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output: 
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+---
+
+# Introducción
+
+## Otros modelos para datos longitudinales
+
+Además del marco de los modelos de series temporales, existen otros
+modelos que nos permiten analizar datos longitudinales. Algunos de ellos
+son:
+
+- **Modelos lineales multinivel**, a veces conocidos como **curvas de crecimiento**,
+permiten el análisis de datos recogidos sobre el mismo individuo o caso a lo largo
+del tiempo.
+    + Ejemplo: Datos sobre la estatura de un niño, tomados cada 6 meses.
+    + No se pueden usar las técnicas tradicionales de análisis (e.g. regresión
+    ordinaria) por la correlación temporal entre muestras del mismo caso.
+    + A veces se denomina a estos datos en inglés *time course data*.
+    + En ocasiones nos permiten modelar otros tipos de dependencias entre muestras,
+    por ejemplo si todos los niños pertenecen a un mismo centro educativo o si todos
+    viven en la misma ciudad o provincia.
+    + Se centran en intentar descubrir las causas subyacentes que provocan el cambio.
+    + En ocasiones, también se conocen como curvas de crecimiento a modelos que
+    intentan ajustar un modelo empírico de crecimiento (por ejemplo, en ecología).
+
+## Otros modelos para datos longitudinales
+
+- **Survival analysis**: permite responder a preguntas del tipo *tiempo hasta que
+un evento ocurre*. Existen varias alternativas de modelos:
+    + *No paramétrico*: obtenemos una estimación del porcentaje de casos estudiados
+    en los que ocurre el evento de interés durante el periodo de observación. Sin
+    embargo, es puramente explicativo (sin variables).
+    + *Semi-paramétrico*: Permite comparar la velocidad a la que experimentan el evento
+    de interés dos o más grupos de estudio (normalmente se discrimina por variables
+    categóricas), o también cómo afecta una variable cuantitativa a la velocidad
+    de ocurrencia del evento.
+    + *Paramétrico*: El presupuesto de partida es que la función que modela el riesgo
+    de ocurrencia del evento en los casos observados sigue una distribución de probabilidad
+    conocida (normalmente Weibull, exp. negativa, logarítimica, etc.).
+    
+    + Ejemplos: tiempo desde que un cliente se registra en una tienda online hasta que
+    efectúa la primera compra; tiempo desde que un cliente notifica un siniestro hasta
+    que se resuelve el expediente; tiempo desde que un egresado sale de la universidad
+    hasta que consigue el primer trabajo...
+
+## Otros modelos para datos longitudinales
+
+- **Análisis de secuencias** (no confundir con el de datos genómicos): Permite modelar
+datos sobre secuencias de estados que atraviesan individuos o casos analizados.
+
+    + Ejemplo en R: [TraMineR](https://samm.univ-paris1.fr/IMG/pdf/Trajectoires-SAMM-20111014_MStuder.pdf).
+    + Análisis descriptivo y explicativo de procesos sociales:
+        + Carrera profesional.
+        + Evolución de clientes en una compañía.
+        + Historial de organizaciones.
+    + Se pueden analizar varios aspectos.
+        + Trayectorias más comunes y su evolución.
+        + Similitudes y diferencias entre secuencias de estados.
+        + Variables que pueden haber influenciado en la llegada a un estado final
+        (mediante *análisis de discrepancias*).
+        
+## Ejemplo de análisis de secuencias: TraMineR
+
+```{r traminer-example, message=FALSE}
+library(TraMineR)
+data(mvad)
+mvad.lab <- c("employment", "further education", "higher education", "joblessness", "school", "training")
+mvad.seq <- seqdef(mvad, 17:86, labels = mvad.lab, xtstep = 6)
+seqiplot(mvad.seq, border = NA, title = "Ten first sequences", withlegend = "right")
+```
+
+## Ejemplo de análisis de secuencias: TraMineR
+```{r traminer-density}
+seqdplot(mvad.seq, withlegend = "right")
+```
+
+# Survival analysis
+
+## Datos censurados
+
+- Cuando conocemos exactamente el comienzo y final del periodo de observación de un caso
+se dice que los datos para ese caso son "uncensored".
+
+- Survival analysis incluye mecanismos de soporte para el análisis de datos censurados
+(específicamente "right censored data"). Tiene en cuenta posibles casos que experimenten
+el evento de interés pero más allá del límite final del intervalo de observación en nuestro
+estudio.
+
+![Esquema de interpretación de datos censados en survival analyis](figs/censoring.png)
+
+
+## Algunas definiciones
+
+- Los tiempos de supervivencia (tiempo transcurrido sin experimentar el evento en cada
+caso o individuo), se consideran una variable aleatoria continua, representada por
+una función de densidad de prob. acumulada $F(t)$ y una función de densidad de probabilidad
+$f(t)$.
+
+-  $f(t)$ representa la probabilidad instantánea (no condicionada) de que el evento de
+interés ocurra en un intervalo $(t, \Delta t)$:
+
+$$f(t) = \lim_{\Delta t \rightarrow 0} \frac{Pr(t \leq T \leq t + \Delta t)}{\Delta t}$$
+
+- La **función de supervivencia** $\hat{S}(t)$ representa la probabilidad $Pr(T \geq t)$, 
+es decir, la proporción de casos que sobreviven más allá de $t$. Finalmente, la 
+probabilidad de ocurrencia de un evento y la función de supervivencia están relacionadas por el 
+**ratio o función de riesgo**, $h(t)$:
+
+$$h(t) = \frac{f(t)}{\hat{S}(t)}$$
+- Es la probabilidad de sufrir el evento de interés en $(t, \Delta t)$, condicionada a que 
+hallamos llegadosin sufrirlo al instante $t$.
+
+## Modelos no paramétricos: estimador KM
+
+- El modelo de Kaplan-Meier permite realizar una estimación puramente descriptiva
+(empírica) de la función de supervivencia.
+
+```{r}
+library(survival)
+args(Surv)
+fitKM = survfit(Surv(time, status) ~ 1, type="kaplan-meier", data = leukemia)
+fitKM
+```
+
+## Estimador KM
+
+```{r}
+summary(fitKM)
+```
+
+## Estimador KM
+
+```{r KM-fig}
+plot(fitKM, conf.int = T, xlab = "Tiempo hasta recaída", ylab="Prop. pacientes en remisión",
+     main = "Estimador KM para dataset leukemia")
+legend("topright", c("LCI 95%", "Est. S(t)", "UCI 95%"), lty=c(2,1,2))
+```
+
+## Estimador KM: comparación de grupos
+
+```{r}
+fitKMgroup = survfit(Surv(time, status) ~ x, type="kaplan-meier", data = leukemia)
+fitKMgroup
+```
+
+## Estimador KM: comparación de grupos
+
+```{r}
+summary(fitKMgroup)
+```
+
+## Estimador KM: comparación de grupos
+
+```{r}
+plot(fitKMgroup, conf.int = F, xlab = "Tiempo hasta recaída", ylab="Prop. pacientes en remisión",
+     main = "Estimador KM para dataset leukemia", lty=c(1,3))
+abline(h=0)
+legend("topright", c("Quim. mant.", "Quim. no mant."), lty=c(1,3))
+```
+
+## Modelo semi-param: Cox-PH
+
+- El modelo de riesgos proporcionales de Cox nos ofrece una solución de compromiso
+entre un modelo puramente descriptivo (KM) y un modelo paramétrico estricto.
+    + En los modelos paramétricos tenemos que acertar al elegir la función de probabilidad
+    del riesgo de producirse el evento de interés.
+    + Si fallamos en ese aspecto, el modelo no sirve para nada (!!).
+    
+- El requisito que se debe cumplir en un modelo de Cox el riesgo de experimentar el evento
+de interés sea proporcional para todos los individuos.
+
+- El riesgo para cada caso se expresa como:
+
+$$h_{i}(t) = h_{0}(t)\{ exp(\beta_{1}x_{i1} + \beta_{2}x_{i2} + \ldots + \beta_{k}x_{ik}) \}$$
+
+- $h_{0}(t)$ es el ratio base de riesgo, que se deja sin especificar. Se interpreta (teóricamente)
+como el riesgo de un individuo con todas las variables $\{x_{k}\}$ a cero.
+
+## Modelo Cox-PH
+
+- El modelo entonces se ajusta expresándolo como el log del cociente de los
+ratios de riesgo:
+
+$$log\left\{ \frac{h_{i}(t)}{h_{0}(t)}\right\} = \beta_{1}x_{i1} + \beta_{2}x_{i2} + \ldots + \beta_{k}x_{ik}) \}$$
+
+- Esto permite que dejemos sin especificar la forma de $h_{0}(t)$, una de las razones
+por la que este modelo se ha popularizado tanto en la actualidad.
+
+- El modelo se llama de riesgos proporcionales porque el ratio de riesgo entre dos
+individuos viene dado por el cociente:
+
+$$\frac{h_{i}(t)}{h_{j}(t)} = exp \{\beta_{1}x_{i1} + \ldots + \beta_{k}x_{ik}) \}$$
+
+- Es decir, si representamos el log. de la función de riesgo para dos individuos, las
+gráficas deben ser paralelas (mucho cuidado, no así en la representación de los riesgos
+en escala original).
+
+## Modelo Cox-PH
+
+![(Izq.) Cumple riesgos prop. (Dcha.) No cumple la condición](figs/prop-hazards-coxph.png)
+
+## Modelo Cox-PH
+
+```{r}
+# También existen funciones mucho más potentes para ajustar estos modelos
+# en el paquete {rms} de F. E. Harrell.
+args(coxph)
+```
+
+- Veamos un ejemplo con el dataset `Rossi`, disponible en el paquete RcmdrPlugin.survival.
+
+- Mide la reincidencia (tiempo transcurrido en semanas hasta un nuevo arresto) de 432 hombres
+analizados durante un año después de su salida de prisión. 
+
+## Ejemplo Cox-PH: dataset Rossi
+
+- La columna `time` indica tiempo hasta un nuevo arresto.
+
+- Las covariables son:
+
+    + `fin`: si el individuo recibe ayuda financiera (`fin=1`) o no (`fin=0`).
+    + `age`: edad (en años) en el momento de salir de prisión.
+    + `race`: indica raza negra (`race=1`) u otra raza (`race=0`).
+    + `wexp`: experiencia previa en trabajo a tiempo completo (`wexp=1` si la tuvo).
+    + `mar`: estado civil (`mar=1` casado).
+    + `paro`: si sale en libertad condicional o no (`paro=1` indica que sí).
+    + `prio`: número previo de estancias en prisión.
+
+## Modelo Cox-PH
+
+```{r }
+data(Rossi, package = "RcmdrPlugin.survival")
+CPH_mod1 = coxph(Surv(week, arrest) ~ fin + age + race + 
+                   wexp + mar + paro + prio, method="efron", data = Rossi)
+summary(CPH_mod1)
+```
+
+<!-- ## Modelo Cox-PH -->
+
+<!-- ```{r echo=FALSE} -->
+<!-- data(Rossi, package = "RcmdrPlugin.survival") -->
+<!-- CPH_mod1 = coxph(Surv(week, arrest) ~ fin + age + race +  -->
+<!--                    wexp + mar + paro + prio, method="efron", data = Rossi) -->
+<!-- summary(CPH_mod1) -->
+<!-- ``` -->
+
+## Modelo Cox-PH
+
+- **Interpretación de los coeficientes**:
+
+    - Un **coeficiente mayor que 1** indica que la variable está asociada con un **mayor riesgo**
+    de que se produzca el evento de interés.
+
+    - Un **coeficiente menor que 1** indica que la variable está asociada con un **menor riesgo**
+    de que se produzca el evento de interés.
+
+    - Un **coeficiente igual a 1** indica que no existe asociación entre la variable y el riesgo de producirse el evento.
+    
+- Ejemplo con el modelo anterior sobre el dataset Rossi:
+
+    - `exp(coef)` para `fin` es 0.6843. El riesgo de rearresto de los que reciben ayuda
+    financiera es el 68.4% del riesgo de los que no la reciben (menor riesgo para los que
+    reciben ayuda).
+    
+    - Otra forma es reportar el cambio porcentual en el riesgo por cada cambio unitario de
+    la variable. Se usa la fórmula $(e^b -1) * 100$. Por ejemplo, cada año más de edad
+    reduce el riesgo semanal de arresto en un 5.6%.
+
+## Extensiones al modelo Cox-PH
+
+- Covariables que cambian con el tiempo: Se pueden introducir variables independientes 
+en el modelo que tengan una dependencia temporal.
+
+- *Frailty models* (riesgos compartidos): Se asume que varios casos o individuos pueden
+compartir factores (desconocidos) que hacen que tengan más propensión a experimentar el evento
+que otros casos. Paquete `frailtypack` en R.
+
+- Eventos recurrentes: Se analiza tiempo hasta que un evento de interés ocurre, teniendo
+también en cuenta posibles repeticiones del evento, siempre dentro del periodo de observación
+del estudio. Paquete `survrec` en R.
+
+- Riesgos que compiten: se analizan posibles causas que puedan derivar en que ocurra el
+evento de interés, calculando un riesgo para cada una y tratando todas las restantes como
+datos censurados. Se exige independencia entre las posibles causas, ya que es preferible
+calcularlo mediante la *Cumulative Incidence Curve* (CIC).
+
+- Una generalización del anterior serían los **modelos multiestado**: el caso o sujeto
+está en riesgo de que le ocurra más de un tipo de evento, y cada evento puede ocurrir
+una o más veces.
+
+    + Modelos de Markov, paquete `mstate`.
+    + Análisis de secuencia, paquete `TraMineR`.
+    
+## Referencias
+
+- [Mills, 2011] M. Mills. *Introducing Survival and Event History Analysis*. Sage
+Publications, 2011.
+
+- [Kleinbaum, 2012] D.G. Kleinbaum, M. Klein. *Survival Analysis. A Self-Learning Text,
+Third Ed.*. Springer, 2012.
+
+- [Moore, 2016] D.F.F. Moore. *Applied Survival Analysis Using R*. Springer, 2016.
+
+- [Harrell, 2015] F.E. Harrell . *Regression Modeling Strategies: With Applications to Linear Models, Logistic and Ordinal Regression, and Survival Analysis*. Springer Series in Statistics, Springer, 2015.
+
+- [Hosmer, 2008] D.W. Hosmer, S. Lemeshow, S. May. *Applied Survival Analysis: Regression Modeling of Time to Event Data, 2nd Edition*. Wiley, 2008.
+
+- [Gabadinho et al., 2011] Gabadinho, A., Ritschard, G., Müller, N.S. & Studer, M. (2011), Analyzing and visualizing state sequences in R with TraMineR, Journal of Statistical Software. Vol. 40(4), pp. 1-37.
+
+- TraMineR at a glance (accedido 26-04-2019): http://traminer.unige.ch/preview-main.shtml.
+
+- [Gabadinho et al., 2009] Gabadinho, A., G. Ritschard, M. Studer and N. S. Müller, Mining sequence data in R with the TraMineR package: A user's guide, University of Geneva, 2009. (http://mephisto.unige.ch/pub/TraMineR/doc/TraMineR-Users-Guide.pdf, accedido 26-04-2019).

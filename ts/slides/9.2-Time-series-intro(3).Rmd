@@ -1,0 +1,465 @@
+---
+title: "9.2 - Introducción al análisis de series temporales"
+subtitle: "Asignatura: Machine Learning - I<br/>Máster en Data Science, URJC"
+author: "Felipe Ortega"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+css: slides.css
+output: 
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# Required packages
+# Features
+library(readr)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+
+# Data
+library(nasaweather)
+
+# Time series and datasets
+library(xts)
+library(quantmod)
+library(tsibble)
+library(tidyquant)
+library(tswge)
+```
+
+# Introducción
+
+## Definición de una serie temporal
+
+- Una serie temporal representa una **serie de valores** obtenidos **a lo largo del tiempo** para una
+variable. 
+
+- Suponiendo una serie de $n$ valores, tomados en diferentes instantes de tiempo
+$t=1, t=2,\dots,$ $t=n$, tendremos:
+
+$$\{x_t: t = 1, 2, \ldots, n\} \: = \: \{x_1, x_2, \ldots, x_n\}\: = \: \{x_t\}$$
+
+- En general, se considera que los valores de la variable se obtienen siempre en instantes
+de tiempo **equiespaciados** entre sí. En caso contrario, se trataría de una *serie temporal
+irregular*, que no vamos a tratar aquí.
+
+- Por ejemplo, muchas series temporales surgen al tomar valores de una variable continua
+(como la temperatura que mide un sensor) cada cierto intervalo de tiempo. A este
+*intervalo entre muestras* se le llama **periodo de muestreo** ($\tau$). 
+Su inversa es la **frecuencia de muestreo** ($f$). Para una serie temporal regular:
+
+$$\text{Periodo de muestreo:}\:\:\tau = t_2 - t_1 = t_3 - t_2 = \dots = t_n - t_{n-1}. \\ 
+\text{Frecuencia de muestreo:}\:\:f = \frac{1}{\tau}$$
+
+## ¿Por qué son diferentes?
+
+- La mayoría de las técnicas estadísticas usuales están pensadas para conjuntos
+de datos formados por observaciones independientes, unas de otras.
+
+- La característica especial de las series temporales es que **sus valores no son
+independientes entre sí**, en general.
+
+    + Observaciones consecutivas suelen tener relación entre sí.
+    + Por tanto tenemos que considerar en el análisis el **orden temporal** de las observaciones.
+
+<br>    
+- Por ejemplo, si hay un sensor que mide mi ubicación y voy a pie, 5 segundos después
+no podré haber ido muy lejos respecto de mi posición previa.
+
+- Cuando las observaciones sucesivas son dependientes, entonces **los valores futuros
+se pueden predecir a partir de los valores pasados de la serie**.
+
+- Por este motivo, uno de los principales objetivos del análisis de series temporales
+es elaborar **modelos de predicción** (en inglés ***forecasting***).
+
+## Ejemplo: serie temporal muestreada
+
+- Serie de valores de temperatura en una habitación, tomados cada minuto por un sensor.
+
+```{r uci-occupancy-data, echo=FALSE, message=FALSE, fig.width=10}
+# https://archive.ics.uci.edu/ml/datasets/Occupancy+Detection+
+occup_data <- read_csv("data/occupancy_data/datatraining.txt", 
+                       col_types = cols(date = col_datetime(format = "%Y-%m-%d %H:%M:%S")))
+occup_temp <- xts(occup_data$Temperature, order.by = occup_data$date)
+plot(occup_temp, col = "navy")
+```
+
+## Ejemplo: serie temporal agregada *ozone*
+
+- Otras series temporales surgen de la **agregación de datos** durante un intervalo. La siguiente
+gráfica muestra valores promedio mensuales de ozono en una ubicación de EE.UU (1995-2000).
+
+```{r nasaweather-atmos, echo=FALSE, message=FALSE, fig.width=10}
+# Dataset nasaweather::atmos; see ?atmos
+ozone_monthly <- atmos %>% 
+  select(lat, long, year, month, ozone) %>% 
+  filter(lat==36.2, long==-113.8)
+
+dates_ozone = as.yearmon(1995 + seq(0, nrow(ozone_monthly)-1)/12)
+ozone_monthly <- xts(ozone_monthly$ozone, order.by = dates_ozone)
+plot(ozone_monthly, col = "turquoise4")
+```
+
+## Ejemplo: serie temporal agregada *sunspots*
+
+- Serie temporal de promedio anual de manchas solares (1749-2008).
+
+```{r tswge-sunspots, echo=FALSE, fig.width=10}
+# Dataset tswge::ss08; see ?ss08
+# Annual average sunspot numbers for the years 1749-2008
+data(ss08)
+sunspots_dates = seq(as.Date("1749-12-31"), length = length(ss08), by = "years")
+sunspots_yearly = xts(ss08, order.by = sunspots_dates)
+plot(sunspots_yearly, col = "sienna2")
+```
+
+# Representación de series temporales en R
+
+## Series temporales en R
+
+- Existen diferentes clases en R que resuelven varios problemas relacionados
+    con la representación y tratamiento de series temporales.
+    + Objetos `ts`, paquetes `its` y `zoo`, `tseries::irts`, `Rmetrics::timeSeries`...
+- Esto obliga a constantes cambios de clase (*casting* de variables), en los
+    que se van perdiendo atributos en cada cambio.
+
+- Para resolver estos y otros problemas, proporcionando una interfaz unificada
+y potente para trabajar con series temporales surgió el paquete `xts`.
+
+- [Ventajas de la clase `xts`](https://cran.r-project.org/web/packages/xts/vignettes/xts.pdf).
+    + Paquete basado en la clase `zoo`.
+    + Soporta objetos de casi todos los restantes paquetes de series temporales.
+    + Formatos de fecha soportados: `POSIXct`, `chron`, `yearmon`, `yearqtr` o `timeDate`.
+    + Sintaxis clara y directa para crear nuevas series, indexar, operaciones
+    de agregación, etc.
+    + Además de proporcionar soporte para no perder los atributos propios de cada
+    clase original, `xts` permite añadir nuevos atributos a cada serie.
+    
+    
+## Lectura de datos `occupancy_data` (UCI)
+
+```{r uci-occupancy-data-read, echo=TRUE, message=FALSE}
+# https://archive.ics.uci.edu/ml/datasets/Occupancy+Detection+
+occup_data <- read_csv("data/occupancy_data/datatraining.txt", 
+                       col_types = cols(date = col_datetime(format = "%Y-%m-%d %H:%M:%S")))
+occup_temp <- xts(occup_data$Temperature, order.by = occup_data$date)
+str(occup_temp)
+```
+
+
+## Lectura de datos `ozone` (`nasaweather::atmos`)
+
+```{r nasaweather-atmos-read, echo=TRUE, message=FALSE}
+# Dataset nasaweather::atmos; see ?atmos
+ozone_monthly <- atmos %>% 
+  select(lat, long, year, month, ozone) %>% 
+  filter(lat==36.2, long==-113.8)
+
+dates_ozone = as.yearmon(1995 + seq(0, nrow(ozone_monthly)-1)/12)
+ozone_monthly <- xts(ozone_monthly$ozone, order.by = dates_ozone)
+str(ozone_monthly)
+```
+
+
+## Lectura de datos `sunspots` (`tswge::ss08`)
+
+```{r tswge-sunspots-read, echo=TRUE, message=FALSE}
+# Dataset tswge::ss08; see ?ss08
+# Annual average sunspot numbers for the years 1749-2008
+data(ss08)
+sunspots_dates = seq(as.Date("1749-12-31"), length = length(ss08), by = "years")
+sunspots_yearly = xts(ss08, order.by = sunspots_dates)
+str(sunspots_yearly)
+```
+
+## Representación gráfica con `xts`
+
+- Uno de los aspectos más potentes de `xts` es que produce por defecto representaciones
+gráficas de calidad.
+
+- Para generar los gráficos al comienzo de la presentación:
+
+```{r xts-plots, echo=TRUE, eval=FALSE}
+plot(occup_temp)
+plot(ozone_monthly)
+plot(sunspots_yearly)
+```
+
+- Estas llamadas son equivalentes a llamar a la función `plot.xts()` (se autoselecciona)
+cuando el objeto a representar es de clase `xts`.
+
+- Características a destacar: 
+    + Etiquetado automático del eje temporal (ahorrando mucho esfuerzo).
+    + Información extra en el título del gráfico.
+    + Grid de fondo automático, elección de relación de aspecto.
+
+## Subsetting con `xts`
+
+- Un aspecto muy potente de `xts` es que permite indexar datos usando strings con
+información temporal, de forma intuitiva.
+
+```{r xts-subsetting, echo=TRUE}
+head(ozone_monthly['1999-03'])
+# Desde el comienzo hasta marzo de 1996
+# ozone_monthly['/1996-03']
+
+# Desde junio de 1997 hasta el final
+# ozone_monthly['1997-06/']
+
+# Selecciona los dos primeros meses
+# xts::first(ozone_monthly, '2 months')
+
+# Selecciona los últimos 3 meses de los dos primeros años
+# xts::last(xts::first(ozone_monthly, '2 years'), '3 months')
+```
+
+## Periodicidad de datos
+
+- La función `periodicity` devuelve información sobre el intervalo entre muestras (frecuencia
+de muestreo).
+
+- La función `to.period` permite muestrear de nuevo la serie cambiando la duración
+del intervalo entre muestras.
+
+```{r xts-periodicity, echo=TRUE, warning=FALSE}
+periodicity(ozone_monthly)
+# Cambiar a periodicidad mensual
+ozone_yearly = to.period(ozone_monthly, 'years')
+periodicity(ozone_yearly)
+# to.yearly(ozone_monthly)  # Para valores bursátiles, columnas: Open, High, Low, Close
+```
+
+## Aplicación de funciones por periodos
+
+- La función `period.apply` permite aplicar funciones de agregación por periodos.
+
+- Las funciones `apply.____` (con el periodo adecuado) hacen lo mismo y 
+simplifican las sintaxis.
+
+```{r xts-period-funcs, echo=TRUE}
+# period.apply(ozone_monthly[,1], INDEX=endpoints(ozone_monthly, on='years'), FUN=min)
+# Equivalente, más claro
+apply.yearly(ozone_monthly[,1], FUN=min)
+# Versión optimizada para muchos datos, ahora calculando máximos anuales
+# period.max(ozone_monthly[,1], endpoints(ozone_monthly, on='years'))
+#
+# Además tenemos: apply.daily, apply.weekly, apply.quarterly, apply.monthly
+```
+
+## Ejemplos: datos financieros
+
+- Datos de los paquetes `quantmod` y `Quandl`, sobre series financieras
+
+```{r data-QQQ, echo=TRUE, message=FALSE, warning=FALSE}
+# Descarga datos de series financieras, por defecto fuente es Yahoo! Finanzas
+# Serie QQQ Nasdaq 100 Index ETF
+QQQ = getSymbols("QQQ", auto.assign = FALSE, src="yahoo")
+head(QQQ)
+# El paquete Quandl permite cargar series temporales con datos financieros previos a 2007
+# Así podríamos trabajar con series más largas
+
+# Leamos ahora unos datos de ejemplo con quantmod
+tracks = c("MSFT", "GOOG"); tracks = getSymbols(tracks, auto.assign = TRUE, src="yahoo")
+prices_xts = cbind(log10(MSFT[,4]), log10(GOOG[,4])) # Soporte series multivariantes
+```
+
+## Series sobrepuestas, mismo panel (zoo)
+```{r yahoo-google-plot-zoo, echo=TRUE, message=FALSE, fig.width=9}
+prices.zoo = as.zoo(prices_xts); brw_col = brewer.pal(3, 'Set1')
+plot(prices.zoo, ylab = "log10(Close price)", ylim = c(0.8,3.3), col=brw_col, screens = 1, 
+     main="Serie de precios al cierre")
+legend(x="topleft", legend=tracks, lty=1, col=brw_col)
+```
+
+## Series sobrepuestas, mismo panel (xts)
+
+- `multi.panel=TRUE` representa una serie en cada panel (por defecto `FALSE`, como aquí).
+
+```{r yahoo-google-plot-xts-i, echo=TRUE, fig.show="hide", message=FALSE, fig.width=9, fig.height=3.5}
+plot(x = prices_xts, xlab = "Tiempo", ylab="log10(precio ajus.)", ylim = c(0.8, 3.3),
+     major.ticks = "years", minor.ticks = FALSE, col=brw_col[1:2], main="Precios ajustados")
+```
+```{r yahoo-google-plot-xts-ii, echo=TRUE, message=FALSE, fig.width=9, fig.height=3.5}
+addLegend(legend.loc = "topleft", legend.names = tracks, lty=1, col=brw_col[1:2])
+```
+
+## Estadísticos descriptivos
+
+- Serie de pasajeros de aerolíneas (datos mensuales).
+
+```{r descr-xts-i, echo=TRUE, fig.height=3.5, , fig.width=10}
+AP_xts = as.xts(AirPassengers)
+plot(AP_xts)
+```
+
+
+## Estadísticos descriptivos
+
+```{r descr-xts-ii, echo=TRUE, fig.height=4, fig.width=10}
+AP_means = period.apply(AP_xts, INDEX = endpoints(AP_xts, on='quarters'), FUN = mean)
+plot(AP_means, ylab = "Media móvil miles pasajeros")
+```
+
+## Estadísticos descriptivos
+
+```{r descr-xts-iii, echo=TRUE, fig.height=4, fig.width=10}
+AP_means = period.apply(AP_xts, INDEX = endpoints(AP_xts, on='months'), FUN = mean)
+AP_sum = period.sum(AP_xts, INDEX = endpoints(AP_xts, on='years'))
+plot(AP_sum, major.ticks = "years", ylab = "Acum. miles pasajeros")
+```
+
+## Descomposición STL
+
+- En R, podemos usar la función `decompose` para intentar detectar la componente estacional de una serie
+temporal. En concreto:
+
+```{r decompose, echo=TRUE, eval=FALSE}
+decompose(serie, type="add")  # Efecto aditivo (A)
+decompose(serie, type="mul")  # Efecto multiplicativo (C)
+```
+
+- Otra opción más sofisticada es emplear la función `stl()` (ver ejemplo en el documento "6.4 Resumen
+de Series Temporales" en este mismo tema).
+  - *Seasonality and Trend decomposition using Loess*.
+  - https://otexts.com/fpp3/stl.html.
+
+## Descomposición STL: ejemplo
+
+```{r passengers-decomp, echo=TRUE, fig.cap="Descomposición en componente de tendencia y estacional de la serie temporal de evolución de pasajeros internacionales en compañías aéreas."}
+AP_decomp = decompose(AirPassengers, type = "mul")
+plot(AP_decomp)
+```
+
+## Descomposición STL: reconstrucción
+
+```{r passengers-decomp-trend-seasonal, echo=TRUE}
+ts.plot(cbind(AP_decomp$trend, AP_decomp$trend * AP_decomp$seasonal), lty=1:2)
+```
+
+## Media, varianza y autocovarianza
+
+- En análisis de datos transversales, los valores que provienen de una cierta distribución de probabilidad
+se caracterizan, entre otros aspectos, por su media y su varianza (o desviación típica).
+
+- En series temporales esta información no es suficiente, y se suelen calcular tres estadísticos de interés.
+
+- **Media** o **esperanza**: La función media, $\mu(t)$, se define para todo $t$ como:
+
+$$\mu(t)\; = \; E[X(t)]$$
+
+- **Varianza**: La función varianza, $\sigma^2(t)$, se define para todo $t$ como:
+
+$$\sigma^2(t)\; = \; Var[X(t)]$$
+
+- **Autocovarianza**: La función de autocovarianza (abreviada como acf. o acv.f.) mide la covarianza entre
+valores de la señal en instantes de tiempo diferentes:
+
+$$\gamma(t_1, t_2)\; = \; E\{[X(t_1)-\mu(t_1)][X(t_2)-\mu(t_2)]\}$$
+
+
+## Media, varianza y autocovarianza (estimación)
+
+- Las funciones descriptivas son desconocidas en su forma general. Por ello,  el único recurso
+que tenemos (al igual que en análisis de datos transversales) es intentar **estimarlas** a partir de la
+**realización empírica del proceso**.
+
+- Un **estimador empírico** para la **media** del proceso es la **esperanza de los valores observados**
+en la serie (considerada como realización de ese proceso):
+
+$$\mu_t = E[x_t]$$
+
+- Para la **varianza** del proceso, tenemos la **varianza de los valores observados** en la serie temporal:
+
+$$\sigma^2_t\; = \; Var[x_t]$$
+
+- Y para la **autocovarianza** del proceso, tenemos la **autocovarianza empírica de los valores observados**
+en la serie que, en general, puede tener un valor diferente para cada dos instantes de tiempo
+$t_1$ y $t_2$ seleccionados:
+
+$$\gamma_{t_1, t_2} = E[(x_{t_1} - \bar{x}_{t_1})(x_{t_2} - \bar{x}_{t_2})]$$
+
+
+## Función de autocorrelación (ACF)
+
+- La **función de autocorrelación** es la versión escalada de la **autocovarianza**, 
+en las mismas unidades de medida que los valores de la serie:
+
+$$\rho(t_1, t_2) = \frac{\gamma(t_1, t_2)}{\sigma(t_1)\sigma(t_2)}$$
+
+- La distancia entre los instantes $t_1$ y $t_2$ es lo que se denomina **retardo** o **lag** del coeficiente
+de autocorrelación. En el caso de $r_1$ el retardo es 1.
+
+- Teniendo en cuenta que 
+$\bar{x}_{(1)} \simeq \bar{x}_{(2)}$ y que $N/(N-1)$ es un valor
+cercano a 1 para un $N$ grande, la fórmula se simplifica para un retardo de 1 a:
+
+$$r_1\; = \; \frac{\displaystyle\sum_{t=1}^{N-1}(x_t-\bar{x})(x_{t+1}-\bar{x})}
+{\displaystyle\sum_{t=1}^{N-1}(x_t-\bar{x})^2}$$
+
+## Función de autocorrelación (ACF)
+
+- Mientras que para un retardo arbitrario $t_2 - t_1 = k$ tenemos:
+
+$$r_k\; = \; \frac{\displaystyle\sum_{t=1}^{N-1}(x_t-\bar{x})(x_{t+k}-\bar{x})}
+{\displaystyle\sum_{t=1}^{N-1}(x_t-\bar{x})^2}$$
+
+- En R, la ACF se calcula mediante la función `acf()`.
+
+
+## Ejemplo: ACF correlación moderada
+
+- Para una serie temporal con una correlación moderada entre valores consecutivos, tendremos unos cuantos
+coeficientes de la ac.f. significativos, y el resto no lo serán.
+
+```{r acf-mild-corr, echo=TRUE, fig.cap="Correlograma para una serie de correlación moderada.", fig.height=4, fig.width=6}
+acf(ts(c(9, 11, 10, 8, 7, 5, 6, 5, 7, 8, 9, 10, 12, 9, 13, 10, 11, 8, 10, 8, 7, 5, 4, 6, 8, 10, 12, 
+         9, 11, 14, 16, 13, 11, 13, 15, 13, 9, 7, 8, 6, 5, 5, 7, 5, 7, 9, 6, 4, 5)),
+    main="ACF para serie con correlación moderada")
+```
+
+
+## Ejemplo: ACF valores alternados
+
+Para una serie temporal con valores consecutivos alternados (subidas y bajadas constantes), la ac.f. también
+mostrará ese patrón. $r_1$ será negativa (para un retardo de 1 los valores de la serie tiene sentidos
+opuestos). $r_2$ será positiva (para un retardo de 2 los valores de la serie vuelven a tener el mismo
+sentido).
+
+```{r acf-alternate, echo=TRUE, fig.cap="Correlograma para una serie con valores alternados", fig.height=4, fig.width=6}
+acf(ts(c(100, 60, 90, 50, 120, 80, 140, 70, 120, 40, 80, 100, 150, 50, 110, 60, 130, 70)),
+    main="ACF para serie con valores alternados")
+```
+
+## Función de autocorrelación parcial (PACF)
+
+Se define la autocorrelación parcial en el retardo $k$
+como la correlación que resulta después de eliminar el efecto de cualquier correlación en retardos más
+cortos (Cowpertwait y Metcalfe 2009). 
+
+- En R se calcula mediante la función `pacf(...)`:
+
+```{r pacf-mild-corr, echo=TRUE, fig.height=4, fig.width=6}
+pacf(ts(c(9, 11, 10, 8, 7, 5, 6, 5, 7, 8, 9, 10, 12, 9, 13, 10, 11, 8, 10, 8, 7, 5, 4, 6, 8, 10, 
+          12, 9, 11, 14, 16, 13, 11, 13, 15, 13, 9, 7, 8, 6, 5, 5, 7, 5, 7, 9, 6, 4, 5)),
+    main="PACF para serie con correlación moderada")
+```
+
+
+## Referencias
+
+- C. Chatfield. *The Analysis of Time Series. An Introduction*. 6th Ed. CRC Press, 2004.
+
+- Wayne A. Woodward, Henry L. Gray, Alan C. Eliott. *Applied Time Series Analysis with R*.
+CRC Press, 2017.
+
+- Box, G.E.P, Jenkins, G.M., Reinsel, G.C. y Ljung, G.M. *Time Series Analysis: Forecasting and Control*.
+Wiley Series in Probability and Statistics, 2015.
+
+- Cowpertwait, P.S.P. y Metcalfe, Andrew V. *Introductory time series with R*. Springer, 2009.
+
+- Cleveland, R.B., Cleveland, W. S., McRae, J.E. y Terpenning, I. (1990) *STL: A Seasonal-Trend 
+Decomposition Procedure Based on Loess*. Journal of Official Statistics, 6, 3–73.

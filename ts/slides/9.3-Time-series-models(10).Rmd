@@ -1,0 +1,353 @@
+---
+title: "9.3 - Modelos autorregresivos para series temporales"
+subtitle: "Asignatura: Machine Learning - I<br/>Máster en Data Science, URJC"
+author: "Felipe Ortega"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+css: slides.css
+output: 
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+---
+
+```{r setup, include=FALSE}
+# Required packages
+# Features
+library(readr)
+library(dplyr)
+library(tidyr)
+library(forecast)
+```
+
+
+# Modelos para series temporales
+
+## Introducción
+
+- Un gran número de modelos para series temporales asumen que, o bien la serie **es estacionaria**,
+o bien **se puede convertir en estacionaria** mediante algún tipo de **transformación**.
+    
+    + También existen modelos para series temporales no estacionarias. Por ejemplo, los modelos
+    AR se pueden aplicar a series no estacionarias.
+    
+- Los modelos más simples son los **autorregresivos** (AR), que generalizan la idea de regresión
+para aplicarla a datos de series temporales. En este caso, el valor de la serie en el instante
+$t$ depende de los valores de la serie en todos los instantes anteriores, por lo que son procesos
+de **memoria larga**.
+
+- Por otro lado, tenemos los modelos de **media móvil** que permiten explicar series temporales
+(procesos estocásticos) de **memoria corta**. En estos, el valor de la serie en el instante $t$
+depende solo de los valores en unos pocos instantes previos.
+
+- La mezcla de ambos modelos se denominan modelos ARMA.
+
+- Finalmente, los modelos ARIMA permiten extender los modelos anteriores para el caso particular
+de **series no estacionarias** que denominamos **integradas**.
+
+## Modelos AR
+
+- El primer tipo de modelos son los llamados **procesos autorregresivos**. La serie $\{x_t\}$ es
+autorregresiva de orden $p$, abreviado como AR(p) si se puede modelar como:
+
+$$x_t = \alpha_1x_{t-1} + \alpha_2x_{t-2} + \ldots + \alpha_px_{t-p}+w_t$$
+
+- En esta ecuación, ya se está considerando que a la serie temporal $\{x_t\}$ le hemos restado
+su media (eliminando así un término constante que quedaría al principio de la ecuación) [Peña 2005].
+
+- Por tanto, un proceso estocástico se puede modelar como AR(p) si se puede representar como una
+combinación lineal de $k$ estados anteriores del proceso $(x_{t-1}, x_{t-2}, \ldots, x_{t-k})$,
+para $k > 0$, más una componente de ruido blanco, $w_t$.
+
+- En el caso particular de AR(1) con $\alpha_1 = 1$, tenemos una serie temporal cuyo 
+valor actual solo depende de forma lineal del último valor observado (lo que se conoce 
+como un *proceso de Markov*). Esta serie en particular se denomina paseo aleatorio 
+(**random walk**):
+
+$$x_t=x_{t-1}+w_t$$
+
+## Ejemplo: simulación de 50 paseos aleatorios
+
+```{r random-walk}
+for (i in 1:50) {
+  x = w = rnorm(1000)
+  for (t in 2:1000){x[t] = x[t-1] + w[t]}
+  if (i==1) plot(x, type = 'l', ylim = c(-100, 100)) else lines(x, type = 'l')
+}
+```
+
+## ACF de un paseo aleatorio
+
+```{r ACF-random-walk}
+acf(x)  # Decaimiento exponencial característico de este tipo de procesos
+```
+
+
+## ACF de un ruido blanco Gaussiano
+
+```{r acf-white-noise, fig.cap="Correlograma para un ruido blanco.", fig.height=4, fig.width=6}
+acf(ts(rnorm(550,0,1)), main="ACF para ruido blanco")
+```
+
+## Condición de estacionariedad
+
+- Es fácil comprobar a simple vista que un paseo aleatorio no es un proceso estacionario.
+La serie de valores puede tender a crecer o disminuir, pero normalmente no se estabiliza
+en torno a un valor medio.
+
+- En general, para que un proceso AR(p) sea **estacionario** se debe cumplir que:
+
+$$|\alpha_i| < 1 \quad i=1, 2, \ldots, p$$
+
+- Por ejemplo, para el caso del paseo aleatorio $\alpha_1 = 1$ y por tanto no cumple la
+condición anterior.
+
+## PACF y detección de modelos AR(p)
+
+- Como hemos visto, una característica de los modelos autorregresivos es que su función
+de autocorrelación (ACF) decae exponencialmente para retardos cada vez mayores.
+
+- Sin embargo, puesto que la serie temporal solo depende de $p$ valores pasados respecto
+al valor actual, su función de autocorrelación parcial (PACF) tendrá $p$ componentes
+distintas de cero y el resto nulas.
+
+```{r ar(1)}
+set.seed(1)
+x = w = rnorm(100)
+# Creamos un proceso estacionario AR(1)
+for (t in 2:100) x[t] = 0.7 * x[t-1] + w[t]
+```
+
+## PACF y detección de modelos AR(p)
+
+```{r plot-ar(1)}
+plot(x, type = "l")
+```
+
+
+## PACF y detección de modelos AR(p)
+
+```{r acf-x}
+acf(x)  # Las componentes decaen exponencialmente
+```
+
+## PACF y detección de modelos AR(p)
+
+```{r pacf-x}
+pacf(x)  # Primer valor no nulo, para el resto de retardos valores nulos
+```
+
+## Ajuste de modelos AR(p)
+
+- En R, podemos utilizar la función `ar` para ajustar un modelo autorregresivo a una
+serie de datos temporales. El siguiente ejemplo muestra cómo podemos estimar el valor
+del coeficiente de autorregresión para la simulación anterior, de un proceso estacionario
+AR(1) con $\alpha_1 = 0.7$
+
+```{r ar-model-i}
+x_armod = ar(x, method = "mle")  # Estimación por máxima verosimilitud
+x_armod$order  # Orden del proceso AR, elegido mediante AIC
+x_armod$ar  # valor del parámetro de autoregressión
+lo = x_armod$ar - qnorm(.975)*sqrt(x_armod$asy.var)
+up = x_armod$ar + qnorm(.975)*sqrt(x_armod$asy.var)
+c(lo, up)
+```
+
+
+## Modelos MA
+
+- En los modelos AR hemos visto que muchos coeficientes de autocorrelación de la serie
+temporal son distintos de cero, aunque con un decaimiento exponencial. Por ello, podemos
+decir que se trata de procesos de **memoria larga** (al menos hasta un retardo $p$).
+
+- Sin embargo, estos modelos no permiten explicar procesos de **memoria corta**. En este
+tipo de procesos, solo hay unos pocos coeficientes de autocorrelación distintos de cero.
+Por tanto, el valor actual de la serie solo está correlado con un número pequeño de valores
+anteriores.
+
+- Una familia interesante de procesos que sí permiten modelar esta situación son los
+procesos de **media móvil** (*moving average*). Un proceso MA(q) (media móvil de orden $q$)
+se puede representar como:
+
+$$x_t = w_t + \beta_1 w_{t-1} + \beta_2 w_{t-2} + \ldots + \beta_n w_{t-q}$$
+
+- Donde $w_t$ es un proceso de ruido blanco con media cero y varianza $\sigma_w^2$. Por
+definición, al ser la suma de múltiples procesos de ruido blanco este proceso es
+**estacionario**.
+
+## Ejemplo: MA(2)
+```{r ma(2), fig.height=4}
+set.seed(1); b = c(0.7, 0.5)
+x = w = rnorm(100)
+for (t in 4:100) {
+  for (j in 1:2) x[t] = x[t] + b[j] * w[t-j]
+}; plot(x, type='l')
+```
+
+## Ejemplo: MA(2)
+```{r ACF-ma(2)}
+acf(x)  # Solo los dos primeros coeficientes son significativos
+```
+
+## Ejemplo: MA(2)
+```{r PACF-ma(2)}
+pacf(x)  # Los coeficientes decaen exponencialmente para retardos cada vez mayores
+```
+
+## Estimación de un modelo MA
+
+```{r ma-estimation}
+x_mamod = arima(x, order = c(0, 0, 2))  ## Orden c(0, 0, q)
+x_mamod
+```
+
+## Modelos ARMA(p, q)
+
+- Una forma muy conveniente de combinar las propiedades de los dos modelos vistos hasta
+ahora consiste en crear un modelo ARMA, como suma de las dos componentes de un modelo
+AR(p) y uno MA(q), respectivamente:
+
+$$x_t = \alpha_1x_{t-1} + \alpha_2x_{t-2} + \ldots + \alpha_px_{t-p}+w_t +  \beta_1 w_{t-1} + \beta_2 w_{t-2} + \ldots + \beta_n w_{t-q}$$
+
+- Igual que en los modelos AR, el proceso es **estacionario** si $|\alpha_i| < 1$.
+- El modelo AR(p) es un caso particular, ARMA(p, 0).
+- El modelo MA(q) es un caso particular, ARMA(0, q).
+- Los modelos ARMA nos ofrecen **parsimonia** respecto al número de parámetros necesarios
+para explicar la serie de los datos (menor que un solo modelo AR o MA).
+
+## Ejemplo ARMA
+
+- Podemos generar procesos ARMA mediante la función `arima.sim`.
+- La función `arima` ajusta un modelo ARMA siempre que pasemos como vector de orden `c(p, 0, q)`.
+
+```{r arma-model}
+set.seed(1)
+x = arima.sim(n = 1000, list(ar = -0.6, ma = 0.5))
+coef(arima(x, order = c(1, 0, 1)))
+```
+
+## Modelos ARIMA
+
+- Muchas series temporales no son estacionarias, puesto que incluyen efectos estacionales
+o tendencias que les hacen incumplir las condiciones necesarias, incluso para estacionariedad
+débil.
+
+- Sin embargo, en muchas ocasiones ocurre que al **diferenciar** (restar) una serie temporal
+respecto de una versión retardada de la misma serie (o varias con diferentes retardos cada
+una), obtenemos como resulado una **serie estacionaria**, sobre la que sí podemos aplicar
+los modelos vistos hasta el momento.
+
+- Como para recuperar la serie original debemos agregar o **integrar** las series 
+diferenciadas, estos modelos reciben el nombre de autorregresivos integrados de media 
+móvil (ARIMA).
+
+- Existen además extensiones particulares de estos modelos, como los modelos ARIMA
+estacionales (SARIMA), que permiten además incluir efectos de cambios repetitivos en periodos
+concretos de la serie.
+
+- La metodología para modelar y resolver este tipo de modelos generales es la que demos
+a Box y Jenkins [Box y Jenkins 2015].
+
+## Definición de proceso ARIMA
+
+- Una serie temporal $\{x_t\}$ se dice que es **integrada de orden d**, denotado como
+$I(d)$, si la d-ésima diferencia de $\{x_t\}$ es un proceso estacionario (ruido blanco).
+
+- Por tanto, una serie $\{x_t\}$ sigue un proceso ARIMA(p, d, q) si la d-ésima diferencia
+de la serie temporal sigue un proceso ARMA(p, q)
+
+- El paseo aleatorio es un caso especial de serie I(1). Si diferenciamos la serie
+respecto de su versión retardada un intervalo, por definición obtenemos como resultado
+ruido blanco, un proceso estacionario.
+
+## Ejemplo: producción eléctrica en Australia
+```{r australia-elec}
+link = "http://www.maths.adelaide.edu.au/andrew.metcalfe/Data/cbe.dat"
+cbe = read.table(link, header = T)
+elec_ts = ts(cbe[,3], start=1958, freq=12)
+plot(elec_ts, ylab="Prod. eléctrica (MkWh)", main="Prod. eléctrica en Australia")
+```
+
+## Ejemplo: producción eléctrica en Australia
+
+- El comando `diff(ts, d=2)` obtendría la diferencia de orden 2 de una serie.
+
+```{r australia-diff}
+plot(diff(elec_ts))
+```
+
+## Ejemplo: producción eléctrica en Australia
+
+```{r australia-diff-log}
+plot(diff(log(elec_ts)))
+```
+
+## Ejemplo: predicción prod. elec. Australia
+
+- Usamos las funciones `auto.arima()` y `forecast()` del paquete `forecast` de R.
+- Para más información: https://otexts.com/fpp2/arima-r.html.
+
+```{r auto.arima, echo=TRUE}
+# Detecta componentes ARIMA y también estacionales (modelo SARIMA)
+arima_elec_ts <- log(elec_ts) %>% auto.arima
+arima_elec_ts
+```
+
+## Ejemplo: predicción prod. elec. Australia
+
+```{r auto.arima-forecast, echo=TRUE}
+# Detecta componentes ARIMA y también estacionales (modelo SARIMA)
+arima_elec_ts %>% forecast %>% autoplot
+```
+
+## Simulación ARIMA
+
+- [Video de ejemplo de series ARIMA simuladas](http://ellisp.github.io/blog/2015/11/21/arima-sims)
+
+- Primera fila: ruido blanco; proceso autorregresivo de orden uno con parámetro $ar1 = 0.8$.
+- Segunda fila: proceso de media móvil con parámetro $ma1 = 0.8$, proceso ARMA(1,1) que
+combina los dos anteriores.
+- Tercera fila: modelo ARIMA(1, 1, 1); ARIMA(2, 2, 2) con parámetros extra y con una 
+suma (integración) adicional.
+
+## Otros modelos avanzados
+
+- Modelos SARIMA: Tienen en cuenta explícitamente tendencias estacionales para cada
+una de las componentes del modelo ARIMA (AR, MA). Mejora las predicciones en series
+con efectos estacionales acusados (e.g. procesos sociales, ecológicos, etc.).
+
+- Modelos ARCH y GARCH: son modelos generados para series con **heterocedasticidad
+condicionada**, es decir, para series temporales cuya varianza no es constante a lo
+largo del tiempo, sino que varía en diferentes periodos. Muy empleados en análisis
+de series financieras con gran volatilidad de valores.
+
+- Modelos VAR y VARMA: permiten el modelado multivariante de varias series temporales
+estudiadas conjuntamente.
+
+    + En este caso, las series deben ser **cointegradas**, es decir, deben compartir una
+    tendencia estocástica común.
+    + Existen métodos estadísticos para detectar  situaciones de cointegración entre
+    varias series temporales.
+
+## Referencias
+
+- George E. P. Box, Gwilym M. Jenkins,Gregory C. Reinsel, Greta M. Ljung.
+*Time Series Analysis: Forecasting and Control*. Wiley Series in Probability and Statistics,
+2015.
+
+- Wayne A. Woodward, Henry L. Gray, Alan C. Eliott. Applied Time Series Analysis with R.
+CRC Press, 2017.
+
+- Hyndman, R.J., & Athanasopoulos, G. (2018) Forecasting: principles and practice, 2nd edition, OTexts: Melbourne, Australia. OTexts.com/fpp2. Accessed on 11-04-2019. URL: https://otexts.com/fpp2/.
+
+- Seminario FPP2: https://robjhyndman.com/seminars/nyc2018/.
+
+- Robert H. Shumway, David S. Stoffer. Time Series Analysis and Applications. EZ Edition,
+with R Examples. Abril, 2016. [PDF](http://www.stat.pitt.edu/stoffer/tsa3/tsa3EZ.pdf).
+
+- Paul S. P. Cowpertwait, Andrew V. Metcalfe. Introductory Time Series with R.
+Springer, 2009.
+
+- Jonathan D. Cryer, Kung-Sik Chang. Time Series Anlaysis With Applications in R.
+Springer, 2008.
+
+- Daniel Peña. Análisis de series temporales. Ciencias Sociales. Alianza Editorial. 2005.

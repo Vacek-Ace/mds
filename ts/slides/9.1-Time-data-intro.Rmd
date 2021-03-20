@@ -1,0 +1,680 @@
+---
+title: "9.1 - Introducción al análisis de datos temporales"
+subtitle: "Asignatura: Machine Learning - I<br/>Máster en Data Science, URJC"
+author: "Felipe Ortega" 
+date: "26 de marzo de 2020"
+css: slides.css
+output: 
+  ioslides_presentation:
+    widescreen: true
+    smaller: true
+---
+
+```{r setup, include=FALSE}
+# Required packages
+# Features
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(RColorBrewer)
+library(cranlogs)
+
+# Data
+library(nasaweather)
+
+# Time series and datasets
+library(xts)
+library(quantmod)
+library(lubridate)
+library(tsibble)
+library(tidyquant)
+library(tswge)
+```
+
+# Datos temporales
+
+## Introducción
+
+- Desde finales de 1970 se ha popularizado el análisis de **datos con dependencias 
+temporales**. Sin embargo, se han desarrollado métodos y herramientas de forma 
+*independiente* en distintas áreas, sin ninguan cohesión.
+
+- Solo en las últimas dos décadas se está produciendo un efecto de *trasvase* de técnicas entre
+diferentes áreas (economía, demografía, medicina, sociología, ingeniería, etc.).
+
+<!-- - Como resultado, ciertas técnicas que son muy similares reciben nombres muy distintos -->
+<!-- dependiendo del área en que nos encontremos. -->
+<!--     + Ejemplo: *Individual growth models, random coefficient models, multilevel models, -->
+<!--     mixed (effects) models, hierarchical lineal models*. [Singer & Willett 2003]. -->
+
+- Es importante extremar las precauciones para comprender los requisitos y supuestos que
+se requieren para aplicar cada técnica, pues de otro modo corremos enormes riesgos a la hora
+de realizar **predicción** o **inferencia**.
+
+  - Muchos **métodos estadísticos habituales no pueden aplicarse** directamente a datos
+  con correlación temporal entre sí.
+  
+<br/>
+
+- Curiosamente, en la década de 1960 y 1970 había serias dudas en muchas áreas científicas sobre
+la posibilidad de desarrollar modelos para medir y comprender el cambio en individuos o grupos,
+a lo largo del tiempo.
+
+- Entre 1957 y 1960 aparecieron las primeras técnicas de suavizado exponencial. 
+En 1970 Box y Jenkins publican su influyente libro *"Time series analysis: Forecasting
+and control"*, estableciendo las bases para uno de los métodos más populares de **análisis de series
+temporales**.
+
+## Introducción: datos temporales
+
+- Los **datos temporales** son aquellos que ofrecen valores **obtenidos a lo largo del
+tiempo**. Es decir, necesitamos un campo (columna, si es una tabla de datos) con información
+sobre el instante en que fue tomado el dato.
+
+- En estadística matemática y, especialmente, en economía (econometría) se suele usar el
+término equivalente **datos de panel**.
+
+Id      Tiempo   var1      var2   var3
+------  -------- ------    ------ -----
+1       2014     campeón   30     10
+1       2015     cuartos   19     21
+1       2016     campeón   31     15
+2       2014     cuartos   15     16
+2       2015     semifinal 21     20
+2       2016     grupos    12     16
+
+
+## Introducción: datos de panel
+
+- Decimos que un panel de datos es **balanceado** cuando tenemos el mismo número de observaciones para
+cada individuo o caso, en todos los puntos temporales considerados.
+
+- Si tenemos diferente número de muestras temporales para cada caso (por ejemplo, nos faltan datos
+para ciertos años, meses, etc.) entonces hablamos de un panel de datos *no balanceado*.
+
+- En muchas ocasiones los datos de panel se organizan de la forma en la que hemos visto en 
+la tabla anterior. Ese formato se denomina **long format**.
+
+- Otro formato alternativo es poner cada caso o individuo en una sola fila, e ir añadiendo columnas
+etiquetadas con el nombre de la variable y la fecha o instante temporal en que se tomó ese valor. Este
+otro formato se denomina **wide format**.
+
+- [Cómo transformar datos entre long y wide format](http://www.cookbook-r.com/Manipulating_data/Converting_data_between_wide_and_long_format/)
+(RCookbook).
+
+## Datos longitudinales y series temporales
+
+- En ocasiones, se usa también el término **datos longitudinales** para referirse a datos
+de panel (con dependencias temporales). Además, tenemos otras series de datos temporales
+llamadas **series temporales**.
+
+- Hay una diferencia entre *datos longitudinales* y *series temporales* [Wei 2019].
+
+- El término *datos longitudinales* designa a conjuntos de datos que contienen valores
+para una muestra aleatoria de individuos o casos, registrados en diferentes instantes
+de tiempo. Para cada caso, tenemos **pocos valores** en el tiempo.
+  - Por ejemplo, un estudio sobre la evolución de resultados académicos de alumnos en un
+  colegio; datos sobre pacientes con problemas cardivasculares, tomados cada 6 meses para
+  cada paciente, etc.
+  - El término *datos longitudinales* proviene de áreas como bioestadística, ciencias de 
+  la salud o estudios sociológicos y políticos. A veces, también se usa el término
+  **medidas repetidas**.
+  
+<br/>
+- Una **serie temporal** designa una única serie de valores (para un solo caso o
+individuo), medidos a lo largo del tiempo. Normalmente, tenemos **muchos valores**
+registrados para cada caso (la serie es "larga", comparada con datos longitudinales).
+
+
+## Datos longitudinales y series temporales
+
+- Hay diferencias en los **objetivos y métodos de trabajo** para cada tipo de análisis.
+
+- El objetivo en **datos longitudinales** es analizar diferencias entre individuos
+o grupos de individuos (o casos), controlando la *dependencia temporal* entre los
+datos recogidos.
+  - Detectar diferencias entre grupos, controlando la dependencia temporal de los
+  datos para un mismo individuo en diferentes instantes.
+  - Por tanto, el principal objetivo en esos estudios suele ser **inferencia**.
+
+<br/>
+- El objetivo en **series temporales** es descubrir patrones y estructuras en la serie de
+datos (aprovechando sus propiedades estocásticas), para proponer un modelo de
+**predicción**, que anticipe el valor de futuros datos.
+
+- En este tema nos ocuparemos de **series temporales**, estudiando diferentes tipos
+de modelos que podemos aplicar para estudiar la serie de valores.
+    
+
+
+## Datos transversales y series temporales
+
+- Entonces, ¿qué aplicación tienen las técnicas estadísticas vistas hasta ahora?
+
+- Los datos que hemos visto hasta ahora (ignorando dependencias temporales) se denominan
+en este contexto **datos transversales**.
+    
+    + **Datos transversales**: Son datos sobre una o varias variables, medidos para varios individuos
+    pero todos ellos obtenidos en el mismo punto temporal. En el panel de datos, correspondería a los 
+    datos por filas para varios individuos en el mismo instante de tiempo.
+    
+    + Los datos transversales **no permiten estudiar cambios en casos o individuos**, 
+    como tampoco permiten realizar **predicción para valores en el futuro** (*forecasting*, diferente
+    de *prediction*).
+    
+    + **Series temporales**: Una serie temporal se construye como resultado de observar los valores
+    de una variable a lo largo del tiempo, normalmente en intervalos regulares (aunque no es obligatorio,
+    y entonces hablamos de *unevenly or irregularly spaced time series*). En el panel de datos,
+    correspondería a los datos de una sola variable (columna), medidos para un único individuo o caso.
+    
+        + O también hablamos de *time-structured data* y *time-unstructured data* [Singer & Willett 2003].
+    
+## Herramientas para análisis de datos temporales
+
+- Dependiendo del tipo de pregunta que nos hagamos, podemos elegir entre una amplia variedad de técnicas
+y herramientas para analizar datos temporales [Singer & Willett, 2003].
+
+    + Comparación de medias entre dos medidas del mismo caso o individuo: *paired t-test*.
+    + Cambios intra-individuales y entre individuos/grupos: *mixed effect models* o *modelos multinivel*.
+        + Nivel 1: Cambios para **un mismo individuo** o caso en el tiempo.
+        + Nivel 2: Cambios de las **diferencias entre individuos** o casos en el tiempo.
+    <br/>   
+    + Análisis de tiempo hasta que sucede un evento: **análisis de superviviencia**.
+    + Análisis de secuencias de eventos: *modelos multiestado* (cadenas de Markov), 
+    *análisis de secuencia o trayectoria*.
+
+
+## Herramientas para análisis de datos temporales
+    
+Predicción de valores futuros: **análisis de series temporales**.
+
+- Descomposición de estacionalidad y tendencia.
+- Modelos autorregresivos (AR, MA, ARMA, ARIMA, SARIMA, SARUMA, SARIMAX, etc.).
+  - Relación entre sistemas dinámicos: **funciones de transferencia**.
+  - Factores que influyen en la serie: **análisis de intervención**.
+- Modelos para alta volatilidad (ARCH, GARCH).
+- Suavizado exponencial (*exponential smoothing*).
+- **Análisis multivariante de series temporales** (en cada instante un vector, no un 
+único valor; e.g. VARMA).
+- Análisis en el dominio de la frecuencia (*spectral analysis*, transformada de Fourier).
+- **Control de procesos** (ingeniería, producción).
+
+Nosotros nos vamos a centrar en los dos primeros tipos.
+
+- Descomposición de estacionalidad y tendencia (STL).
+- Modelos autorregresivos integrados de medias móviles (ARIMA).
+        
+<!-- ## Herramientas para análisis de datos temporales  -->
+
+<!-- - Herramientas para estudios de datos longitudinales o **medidas repetidas** (*repeated measures*). -->
+
+<!--     + Estudios con salidas temporales: tomamos los valores de la salida en diferentes instantes -->
+<!--     de tiempo. -->
+<!--     + *Crossover experiments*: Cada sujeto recibe más de un nivel de tratamiento. Los sujetos se -->
+<!--     asignan aleatoriamente a uno de los niveles y medimos la salida. Entonces, se les pasa (*cross over*) -->
+<!--     a otro nivel y se vuelve a medir la salida. -->
+<!--     + *Split-plot experiments*: Se examinan los efectos de dos variables categóricas diferentes. -->
+<!--     Primero se asigna un sujeto a uno de los valores (grupos) del primer nivel de forma aleatoria. -->
+<!--     Entonces, en una segunda etapa se determina (también aleatoriamente) el orden de paso por las -->
+<!--     categorías (grupos) de la segunda variable. Todas las unidades pasan por todas las categorías -->
+<!--     del segundo nivel, pero solo se les asigna a una categoría del primer nivel. -->
+    
+# Representación de datos temporales
+
+## Datos temporales en R
+
+- Para la representación de datos temporales en R, normalmente distinguimos entre dos posibles
+situaciones:
+
+    + Análisis de **datos de panel**: Normalmente se representan mediante un data.frame, siguiendo el
+    formato **long**. A pesar de ello, ciertas herramientas (por ejemplo, algunos tipos de análisis
+    de secuencia) exigen encontrar los datos en formato *wide*.
+    
+    + Análisis de **series temporales**: Se suelen emplear objetos (clases) en R especializados para
+    la representación de series temporales.
+        + `ts` ofrece la versión más básica.
+        + `zoo` ofrece soporte para series con espacio regular o irregular, además de soportar también
+        datos faltantes (rupturas en la serie de valores). Intenta ser lo más consistente posible con
+        las funciones del paquete básico `ts`.
+        + `xts` es un tercer paquete que intenta proporcionar una interfaz uniforme para trabajar con
+        datos de series temporales en R.
+        + `tsibble` es un nuevo paquete del grupo de Rob Hyndman, para representación y análisis
+        de series temporales dentro del ecosistema *tidyverse*: https://tsibble.tidyverts.org/.
+        + `tidyquant` es otra alternativa para análisis de series temporales, integrada en
+        *tidyverse*, más enfocado a datos financieros: [Introducción a `tidyquant`](https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ00-introduction-to-tidyquant.html).
+
+## Ejemplo: conversión *long* a *wide* y viceversa
+
+- Función `tidyr::gather()`: https://tidyr.tidyverse.org/reference/gather.html.
+- Función `tidyr::spread()`: https://tidyr.tidyverse.org/reference/spread.html.
+
+- **Nuevas funciones para pivotar**: https://tidyr.tidyverse.org/dev/articles/pivot.html.
+  + Sustituyen a las antiguas funciones `gather()` y `spread()` del paquete
+  `tidyr`.
+  + Incluyen funcionalidades más flexibles y una interfaz teóricamente más intuitiva
+  para transformar los datos entre ambos formatos.
+
+<!-- - [Tutorial en línea, por G. Grolemund](http://garrettgman.github.io/tidying/). -->
+<!-- - Necesita instalación del paquete DRS: `devtools::install_github("garrettgman/DSR")`. -->
+
+<!-- ```{r example-gather-spread} -->
+<!-- library(tidyr) -->
+<!-- library(DSR) -->
+<!-- # table1: ejemplo de datos en formato long -->
+<!-- # table2: ejemplo de datos que parecen en formato long pero no es "tidy data" -->
+<!-- spread(table2, "key", "value")  # Pasamos a formato long y "tidy data" -->
+<!-- # table4: ejemplo de datos en formato wide -->
+<!-- gather(table4, "year", "cases", 2:3) -->
+<!-- ``` -->
+
+<!-- ## Ejemplo: *long* format -->
+
+<!-- ```{r example-gather-spread-ii} -->
+<!-- # table4: ejemplo de datos en formato wide -->
+<!-- gather(table4, "year", "cases", 2:3) -->
+<!-- ``` -->
+
+<!-- ## Ejemplo: paso de *long* a *wide* format -->
+
+<!-- ```{r example-reshape} -->
+<!-- half1 = spread(table1[,1:3], year, cases) -->
+<!-- half2 = spread(table1[,c(1,2,4)], year, population) -->
+<!-- wide = cbind(half1, half2[,2:3]) -->
+<!-- colnames(wide)[2:3] = paste0('cases_', colnames(wide)[2:3]) -->
+<!-- colnames(wide)[4:5] = paste0('population_', colnames(wide)[4:5]) -->
+<!-- wide -->
+<!-- ``` -->
+
+## Series temporales en R: `xts`
+
+- [Ventajas de la clase `xts`](https://cran.r-project.org/web/packages/xts/vignettes/xts.pdf).
+    + Existen diferentes clases en R que resuelven varios problemas relacionados
+    con la representación y tratamiento de series temporales.
+    + `tseries::irts`, `Rmetrics::timeSeries`, paquetes `its` y `zoo`.
+    + Esto obliga a constantes cambios de clase (*casting* de variables), en los
+    que se van perdiendo atributos en cada cambio.
+    + Además de proporcionar soporte para no perder los atributos propios de cada
+    clase original, `xts` permite añadir nuevos atributos a cada serie.
+    
+- Basado en la clase `zoo`.
+- Formatos de fecha soportados: `POSIXct`, `chron`, `yearmon`, `yearqtr` o `timeDate`.
+- Desventajas: `xts` no está integrado con el ecosistema de herramientas y paquetes
+de *tidyverse* (nuevo paquetes como `tsibble` si lo están).
+
+## Ejemplo `xts` con matrices
+
+```{r xts-matrix, message=FALSE}
+require(xts)
+data(sample_matrix)
+str(sample_matrix)
+# Si no se indica formato usa `POSIXct` por defecto
+matrix_xts <- as.xts(sample_matrix, dateFormat='Date')
+str(matrix_xts)
+```
+
+## Subsetting con `xts`
+
+- Un aspecto muy potente de `xts` es que permite indexar datos usando strings con
+información temporal, de forma intuitiva.
+
+```{r xts-subsetting}
+head(matrix_xts['2007-03'])
+# Desde el comienzo hasta el 5 de enero de 2007
+# matrix_xts['/2007-01-05']
+# Desde el 25 de junio de 2007 hasta el final
+# matrix_xts['2007-06-25/']
+# Selecciona primeras 2 semanas de datos
+# first(matrix_xts, '2 week')
+# Selecciona los últimos 3 días de las primeras 2 semanas
+# first(last(matrix_xts, '2 week'), '3 days')
+```
+
+## Representación gráfica `xts`
+
+```{r graph-xts}
+plot(matrix_xts[,1], major.ticks = 'months', minor.ticks = FALSE, col='navy',
+     main='Serie de ejemplo')
+```
+
+## Vuelta a la clase original
+
+- Usamos `xts::reclass`.
+- Internamente, recuerda la clase original del objeto (si la hubiese) y preserva
+de forma inteligente todos los atributos especiales que pudiera tener.
+
+```{r reclass-xts}
+str(reclass(as.xts(sample_matrix)['2007-05']))
+```
+
+## Periodicidad de datos
+
+```{r xts-periodicity, warning=FALSE}
+periodicity(matrix_xts)
+# Cambiar a periodicidad mensual
+montly_matrix_xts = to.period(matrix_xts, 'months')
+periodicity(montly_matrix_xts)
+to.monthly(matrix_xts)  # Con etiquetas adecuadas
+```
+
+## Aplicación de funciones por periodos
+
+```{r xts-period-funcs}
+# period.apply(matrix_xts[,4], INDEX=endopoints(matrix_xts, on='months'), FUN=min)
+# Equivalente, más claro
+# apply.monthly(matrix_xts[,4], FUN=min)
+# Versión optimizada para muchos datos
+period.max(matrix_xts[,4], endpoints(matrix_xts, on='months'))
+# Además: apply.daily, apply.weekly, apply.quarterly, apply.yearly
+```
+
+# Series temporales en *tidyverse*
+
+## Series temporales y *tidy data*
+
+- El conjunto de paquetes que conforman `tidyverse` se ha vuelto muy
+popular en R.
+
+- Implementan los principios de **tidy data**, introducidos por H. Wickham.
+
+- Implementan una **gramática de datos**, similar a la de otros lenguajes de
+programación (e.g. `Pandas` en Python) para procesado y análisis de datos
+estructurados.
+
+- Incorpora los **principios de diseño** de **bases de datos relacionales** para
+tratar con tablas de datos.
+
+- Como consecuencia, tiene sentido que aparezcan nuevos paquetes que integren
+soporte para procesado y análisis de series temporales en este entorno:
+    + `tsibble` es un paquete creado por el equipo de Rob Hyndman (autor, entre
+    otros, del paquete `forecast`). 
+    + https://pkg.earo.me/tsibble/.
+    + `tidyquant` es un paquete creado por Matt Dancho, para dar soporte al análisis de series
+    temporales económicas, dentro del ecosistema de paquetes del `tidyverse`.
+    + [Vignette: Introduction to tidyquant](https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ00-introduction-to-tidyquant.html).
+
+# El paquete *tsibble*
+
+
+## Introducción a `tsibble`
+
+- Todavía está en fase de desarrollo (versión 0.8.6 en este momento), pero
+evoluciona muy rápidamente.
+
+- Se ha creado un subconjunto de paquetes llamado `tidyverts`, que integra varias
+herramientas junto a `tsibble` para análisis de datos: https://tidyverts.org/.
+
+- `tsibble`tiliza la clase `tbl_ts` para representar *tidy data* en contextos de análisis
+temporales. El objeto se construye a partir de una `tibble`, y consta de:
+    + Un **índice temporal** (una columna de nuestra tabla de datos).
+    + Una clave para cada entrada. Puede constar de una o varias columnas, para
+    identificar casos individuales.
+    + El resto de variables (columnas) que miden valores en cada instante que indica
+    el índice temporal.
+
+- Incorpora diversos avances, como por ejemplo soporte para series temporales
+jerárquicas y agrupadas, esto es, agrupaciones de series temporales relacionadas entre
+sí (por ejemplo, por género, geografía o tipo de producto). 
+
+- Las series temporales jerárquicas se pueden
+analizar con el paquete `hts` de los mismos autores, pero sin soporte para tidy data.
+
+## Creación de objetos `tsibble`
+
+- La función `tsibble()` crea un objeto de este tipo.
+- La función `as_tsibble()` convierte objetos de otro tipo en un `tsibble`.
+    + La conversión es automática para objetos `ts`, `xts` o `hts`.
+    + Si es un `data.frame` o una `tibble`, necesitamos indicar las columnas
+    que actuarán como índice y clave.
+    
+- Veamos un ejemplo con datos meteorológicos del paquete nycflights13.
+```{r nycflights-weather, echo=1:6}
+weather <- nycflights13::weather %>% 
+  select(origin, time_hour, temp, humid, precip)
+head(weather, 4)
+```
+
+
+## Creación de objetos `tsibble`
+
+- En este caso, partimos de un objeto `tibble`, así que usamos `as_tsibble()`.
+    + Si solo hay una columna con datos temporales, la identifica automáticamente
+    como índice. También se puede indicar explícitamente con el argumento
+    `index = col_timestamp`.
+    + Hay que indicar qué columna queremos que actúe, junto al índice temporal, como
+    **clave primaria**. En este caso es `origin` y usamos la función `id()` para crear
+    automáticamente un identificador entero que indexa de forma eficiente para cada
+    valor de esa columna. El resto de columnas son observaciones.
+
+```{r create-tsibble, echo="hold"}
+weather_tsbl <- as_tsibble(weather, key = origin); head(weather_tsbl, 3)
+```
+
+## Operaciones con `tsibble`
+
+- `index_by()` es el equivalente de `group_by()` para la columna temporal. Agrupa los
+cálculos por intervalos temporales.
+
+- `summarise()`, después de `index_by()`, obtiene resúmenes de datos para cada
+intervalo temporal.
+
+- Ejemplo: obtener la temperatura diaria máxima y mínima.
+
+```{r max-min-temp-daily, echo=TRUE}
+weather_tsbl %>%
+  group_by(origin) %>%
+  index_by(date = as_date(time_hour)) %>% 
+  summarise(
+    temp_high = max(temp, na.rm = TRUE),
+    temp_low = min(temp, na.rm = TRUE)
+  ) %>% head(3)
+```
+
+
+## Operaciones con `tsibble`
+
+- Las operaciones propias de `tsibble` combinan de forma natural con las del
+paquete `dplyr`.
+
+- Ejemplo: seleccionar la temperatura máxima y mínima diaria entre el 1 y el 3 de enero
+de 2013 en el aeropuerto "JFK".
+
+```{r max-min-temp-daily-filter, echo=TRUE}
+weather_tsbl %>%
+  filter(time_hour >= "2013-01-01 00:00", time_hour <= "2013-01-03 23:00",
+         origin == "JFK") %>%
+  group_by(origin) %>%
+  index_by(date = as_date(time_hour)) %>% 
+  summarise(
+    temp_high = max(temp, na.rm = TRUE),
+    temp_low = min(temp, na.rm = TRUE)
+  ) %>% head()
+```
+
+## Operaciones con `tsibble`
+
+- Existen diversos conjuntos de operaciones con ventanas temporales.
+
+- `slide()`, `slide2()` y `pslide()` soportan ventanas temporales con solape entre
+observaciones.
+- `tile()`, `tile2()` y `ptile()` soportan ventanas adosadas, sin solape entre
+observaciones.
+- `strech()`, `strech2()` y `pstrech()` fijan una ventana inicial que se expande
+progresivamente, para incluir más observaciones.
+
+- **Importante** soportan interfaz e implementación de `purrr`, por lo que integran
+principios de paralelización y programación fucnional para hacer más eficientes
+los cálculos.
+
+- También se puede elegir realizar el *enventanado* de datos solo parcialmente, para
+una parte de la tabla y no para la tabla completa de datos.
+
+- Información y ejemplos: https://pkg.earo.me/tsibble/articles/window.html.
+
+# El paquete *tidyquant*
+
+
+## Introducción a `tidyquant`
+
+- Paquete en versión ya estable (version 1.0.0 en este momento).
+
+- Implementa herramientas de análisis de series temporales financieras, dentro
+del entorno `tidyverse`.
+    + `xts` para soporte de series temporales.
+    + `quantmod` para datos y modelos financieros y bursátiles.
+    + `TTR` para computación de ecuaciones técnicas para operaciones bursátiles.
+    + `PerformanceAnalytics` con funciones econométricas para rendimiento y
+    análisis de riesgos.
+    
+- Los gráficos se construyen a partir de `ggplot2`, para una mejor integración con
+el resto de `tidyverse` y mayor calidad visual.
+
+- Funciona directamente con una `tibble`, no hay que crear un objeto especial
+(como en `tsibble`).
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+- Análisis de las descargas acumuladas por varios paquetes en CRAN, entre el 1 de enero
+y el 30 de junio de 2017.
+
+- Descargamos los datos.
+
+```{r cran-downloads, echo=TRUE}
+pkgs <- c("tidyr", "lubridate", "dplyr", "broom", "tidyquant", "ggplot2", "purrr", "stringr", "knitr")
+
+# Función cranlogs::cran_downloads()
+tidyverse_downloads <- cran_downloads(
+    packages = pkgs, 
+    from     = "2017-01-01", 
+    to       = "2017-06-30") %>%
+    tibble::as_tibble() %>%
+    group_by(package); head(tidyverse_downloads, 3)
+```
+
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+```{r cran-downloads-ggplot2,eval=FALSE}
+tidyverse_downloads %>%
+    ggplot(aes(x = date, y = count, color = package)) +
+    geom_point() +
+    labs(title = "tidyverse packages: Daily downloads", x = "") +
+    facet_wrap(~ package, ncol = 3, scale = "free_y") +
+    scale_color_tq() +
+    theme_tq() +
+    theme(legend.position="none")
+```
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+```{r cran-downloads-ggplot2-figs, fig.height=5, fig.width=10,echo=FALSE}
+tidyverse_downloads %>%
+    ggplot(aes(x = date, y = count, color = package)) +
+    geom_point() +
+    labs(title = "tidyverse packages: Daily downloads", x = "") +
+    facet_wrap(~ package, ncol = 3, scale = "free_y") +
+    scale_color_tq() +
+    theme_tq() +
+    theme(legend.position="none")
+```
+
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+- La forma de trabajar es muy similar a `xts`.
+- Usamos las funciones `apply.___()` junto con `tq_transmute()` para calcular
+el promedio semanal de descargas.
+
+```{r cran-downloads-weekly-avg, echo=TRUE}
+mean_tidyverse_downloads_w <- tidyverse_downloads %>%
+    tq_transmute(
+        select     = count,
+        mutate_fun = apply.weekly, 
+        FUN        = mean,
+        na.rm      = TRUE,
+        col_rename = "mean_count"
+    ); head(mean_tidyverse_downloads_w, 4)
+```
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+```{r cran-downloads-weekly-ggplot2, eval=FALSE}
+mean_tidyverse_downloads_w %>%
+    ggplot(aes(x = date, y = mean_count, color = package)) +
+    geom_point() +
+    geom_smooth(method = "loess") + 
+    labs(title = "tidyverse packages: Average daily downloads by week", x = "", 
+         y = "Mean Daily Downloads by Week") +
+    facet_wrap(~ package, ncol = 3, scale = "free_y") +
+    expand_limits(y = 0) + 
+    scale_color_tq() +
+    theme_tq() +
+    theme(legend.position="none")
+```
+
+## Ejemplo: análisis de descargas de paquetes CRAN
+
+```{r cran-downloads-weekly-ggplot2-figs, fig.height=5, fig.width=10, echo=FALSE}
+mean_tidyverse_downloads_w %>%
+    ggplot(aes(x = date, y = mean_count, color = package)) +
+    geom_point() +
+    geom_smooth(method = "loess") + 
+    labs(title = "tidyverse packages: Average daily downloads by week", x = "", 
+         y = "Mean Daily Downloads by Week") +
+    facet_wrap(~ package, ncol = 3, scale = "free_y") +
+    expand_limits(y = 0) + 
+    scale_color_tq() +
+    theme_tq() +
+    theme(legend.position="none")
+```
+
+## Más ejercicios sobre este ejemplo
+
+- Operaciones por periodos (parte I):
+- https://www.business-science.io/timeseries-analysis/2017/07/02/tidy-timeseries-analysis.html.
+- Funciones con ventanas temporales (parte II):
+- http://www.business-science.io/timeseries-analysis/2017/07/23/tidy-timeseries-analysis-pt-2.html.
+- Correlaciones con ventanas temporales (parte III):
+- http://www.business-science.io/timeseries-analysis/2017/07/30/tidy-timeseries-analysis-pt-3.html.
+- Retardos y autocorrelaciones (parte IV).
+- http://www.business-science.io/timeseries-analysis/2017/08/30/tidy-timeseries-analysis-pt-4.html.
+
+## Conclusiones
+
+- `tsibble` y `tidyquant` son dos nuevos paquetes para procesado y análisis de series temporales
+en el contexto del entorno `tidyverse`.
+
+- De momento, ambos han sido "reconocidos" como los paquetes de referencia para series temporales
+en este entorno.
+    + Max Kuhn tiene planificado incluirlo dentro de la lista de paquetes que carga `tidymodels`,
+    el metapaquete para unificar las diferentes herramientas para modelado de datos y análisis
+    estadístico en `tidyverse`.
+    + https://www.tidyverse.org/articles/2018/08/tidymodels-0-0-1/.
+    + https://github.com/tidymodels/tidymodels.
+    
+- `tsibble` es más potente, ya que incluye soporte para definir *claves primarias*, que van
+a permitir cruzar y alinear datos de diferentes series temporales (análisis multivariante),
+para series jerárquicas y/o agrupadas.
+
+- `tidyquant` es más sencillo, ya que opera directamente sobre objetos `tibble`, detectando
+la columna que contiene el índice temporal. Utiliza las mismas funciones que `xts`, `quantmod`
+y `PerformanceAnalytics`, añadiendo soporte para tidy data.
+
+## Referencias
+
+- Singer, J. D. & Willett, J. B. *Applied Longitudinal Data Analysis: Modeling Change and Event Occurrence*. Oxford University Press, 2003.
+- William W. S. Wei. *Multivariate Time Series Analysis and Applications*. Wiley Series in Probability and Statistics, 2019.
+
+- [Website tsibble](https://pkg.earo.me/tsibble/).
+    + [Vignette: Introduction to tsibble](https://pkg.earo.me/tsibble/articles/intro-tsibble.html).
+    + [Vignette: Window functions](https://pkg.earo.me/tsibble/articles/window.html).
+
+<br/>
+
+- [Paquete tidyquant en CRAN](https://cran.r-project.org/web/packages/tidyquant/).
+  - [Vignette: Introduction to tidyquant](https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ00-introduction-to-tidyquant.html).
+  - [Vignette: Core functions in tidyquant](https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ01-core-functions-in-tidyquant.html).
+  - [Vignette: Charting in tidyquant](https://cran.r-project.org/web/packages/tidyquant/vignettes/TQ04-charting-with-tidyquant.html).
+
+
+    

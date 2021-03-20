@@ -1,0 +1,77 @@
+---
+title: "Exercise solutions: Section 1.8"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+# Ex 1
+
+>For cases 3 and 4 in Section 1.5, list the possible predictor variables that might be useful, assuming that the relevant data are available.
+
+Case 3: the following predictor variables might be useful, assuming that the relevant data are available:
+
+* Model and make of the vehicle
+* Odometer reading
+* Conditions of the vehicle
+* Company the vehicle was leased to
+* Color of the vehicle
+* Date of sale
+
+Case 4: the following predictor variables might be useful, assuming that the relevant data are available:
+
+* Day of the week
+* Day of the year
+* Is the day before long weekend
+* Is the day in the end of long weekend
+* Is the day before or in the beginning of school holidays (one variable per every state)
+* Is the day in the end of school holidays (one variable per every state)
+* Is the day before or in the beginning of a major sport event
+* Is the day after of a major sport event
+* Competitors' prices (relative to the price of the airline in question)
+* Is there a pilot strike at some of the competitors' airlines
+* Is there a pilot strike at the airline in question
+
+# Ex 2
+> For case 3 in Section 1.5, describe the five steps of forecasting in the context of this project.
+
+#### 1. Problem definition
+
+* The main stakeholders should be defined and everyone questioned about which way he or she can benefit from the new system. In case of the fleet company probably the group of specialists was not recognized as stakeholders which led to complications in gathering relevant information and later in finding an appropriate statistical approach and deployment of the new forecasting method.
+
+#### 2. Gathering information
+
++ Data set of past sales should be obtained, including surrounding information such as the way data were gathered, possible outliers and incorrect records, special values in the data.
+
++ Expertise knowledge should be obtained from people responsible for the sales such as seasonal price fluctuations, if there is dependency of the price on the situation in economy, also finding other possible factors which can influence the price.
+
+#### 3. Preliminary (exploratory) analysis
+
++ Possible outliers and inconsistent information should be found (for example very small, zero or even negative prices).
+
++ Graphs which show dependency of the sale price on different predictor variables should be considered.
+
++ Dependency of the sale price on month of the year should be plot.
+
+#### 4. Choosing and fitting models
+
++ A model to start from (for example a linear model) and predictor variables which most likely affect the forecasts should be chosen. Predicting performance of the model should be evaluated.
+
++ The model should be changed (for example by transforming parameters, adding or removing predictor variables) and it's performance evaluated. This should be done iteratively a few times until a satisfactory model is found.
+
+#### 5. Using and evaluating a forecasting model
+
++ The appropriate software should be deployed to the company and relevant people should be educated how to use this software.
+
++ Forecasting accuracy should be checked against new sales. If necessary the model should be updated and then the deployed software.
+
+

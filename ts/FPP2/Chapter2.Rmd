@@ -1,0 +1,353 @@
+---
+title: "Exercise solutions: Section 2.10"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+> Use the help menu to explore what the series `gold`, `woolyrnq` and `gas` represent. These are available in the `forecast` package.
+
+```{r, echo=TRUE, cache=TRUE, eval=FALSE}
+   help(gold)
+   help(woolyrnq)
+   help(gas)
+```
+
+>   a.  Use `autoplot` to plot each of these in separate plots.
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(gold)
+autoplot(woolyrnq)
+autoplot(gas)
+```
+
+>    b.  What is the frequency of each commodity series? Hint: apply     the `frequency()` function.
+
+```{r, echo=TRUE, cache=TRUE}
+frequency(gold)
+frequency(woolyrnq)
+frequency(gas)
+```
+
+>    c.  Use `which.max()` to spot the outlier in the `gold` series. Which observation was it?
+
+```{r, echo=TRUE, cache=TRUE}
+which.max(gold)
+```
+
+# Ex 2
+
+> Download the file `tute1.csv` from [the book website](https://OTexts.org/fpp2/extrafiles/tute1.csv), open it in Excel (or some other spreadsheet application), and review its contents. You should find four columns of information. Columns B through D each contain a quarterly series, labelled Sales, AdBudget and GDP. Sales contains the quarterly sales for a small company over the period 1981-2005. AdBudget is the advertising budget and GDP is the gross domestic product. All series have been adjusted for inflation.
+
+>   a.  You can read the data into R with the following script:
+
+```{r, echo=TRUE, cache=TRUE}
+tute1 <- read.csv("data/tute1.csv", header=TRUE)
+#View(tute1)
+```
+
+>    b.  Convert the data to time series
+
+```{r, echo=TRUE, cache=TRUE}
+mytimeseries <- ts(tute1[,-1], start=1981, frequency=4)
+```
+
+>  (The `[,-1]` removes the first column which contains the quarters as we don't need them now.)
+
+>    c.  Construct time series plots of each of the three series
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(mytimeseries, facets=TRUE)
+```
+
+>    Check what happens when you don't include `facets=TRUE`.
+
+```{r, echo=TRUE, cache=TRUE, dependson="exmyts"}
+autoplot(mytimeseries)
+```
+
+# Ex 3
+
+> Download some monthly Australian retail data from [the book website](https://OTexts.org/fpp2/extrafiles/retail.xlsx). These represent retail sales in various categories for different Australian states, and are stored in a MS-Excel file.
+
+>    a. You can read the data into R with the following script:
+
+```{r, echo=TRUE, cache=TRUE}
+retaildata <- readxl::read_excel("data/retail.xlsx", skip=1)
+```
+
+>  The second argument (`skip=1`) is required because the Excel sheet has two header rows.
+
+>    b. Select one of the time series as follows (but replace the column name with your own chosen column):
+
+```{r, echo=TRUE, cache=TRUE}
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+```
+
+>    c. Explore your chosen retail time series using the following functions: `autoplot`, `ggseasonplot`, `ggsubseriesplot`, `gglagplot`, `ggAcf`
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(myts)
+ggseasonplot(myts)
+ggsubseriesplot(myts)
+gglagplot(myts)
+ggAcf(myts)
+```
+
+>    Can you spot any seasonality, cyclicity and trend? What do you learn about the series?
+
+In this example (and yours might be different), there is clearly an increasing trend, strong seasonality, and increasing variance as the level increases. There is little evidence of cyclicity.
+
+# Ex 4
+> Create time plots of the following time series:
+> `bicoal`, `chicken`, `dole`, `usdeaths`, `lynx`, `goog`, `writing`, `fancy`, `a10`, `h02`.
+>
+>    + Use `help()` to find out about the data in each series.
+>    + For the `goog` plot, modify the axis labels and title.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+autoplot(bicoal)
+autoplot(chicken)
+autoplot(dole)
+autoplot(usdeaths)
+autoplot(lynx)
+autoplot(goog) +
+  xlab("Year") + ylab("Price ($)") +
+  ggtitle("Google closing stock price")
+autoplot(writing)
+autoplot(fancy)
+autoplot(a10)
+autoplot(h02)
+```
+
+# Ex 5
+
+>Use the `ggseasonplot` and `ggsubseriesplot` functions to explore the seasonal patterns in the following time series:  `writing`, `fancy`, `a10`, `h02`.
+>
+> - What can you say about the seasonal patterns?
+> - Can you identify any unusual years?
+
+
+```{r, echo=TRUE}
+ggseasonplot(writing)
+ggsubseriesplot(writing)
+```
+
+ * August is very low compared to other months (a summer vacation effect in France)
+ * Otherwise weak seasonality
+ * No obviously unusual years
+
+
+```{r, echo=TRUE}
+ggseasonplot(fancy)
+ggsubseriesplot(fancy)
+```
+
+December is much higher than the other months, presumably due to summer holidays in Queensland, or possibly Christmas. The last few years show much higher sales than previous years, but this is probably just due to the exponential trend in the data.
+
+
+```{r, echo=TRUE}
+ggseasonplot(a10)
+ggsubseriesplot(a10)
+```
+
+ * seasonality jumps in January, falls in February, then slowly increases through the year.
+ * Feb-Mar-Apr pattern of down-up-down probably due to month lengths
+ * 2008 reverses the pattern
+
+
+```{r, echo=TRUE}
+ggseasonplot(h02)
+ggsubseriesplot(h02)
+```
+
+  * seasonality jumps in January, falls in February, then slowly increases through the year.
+ * Feb-Mar-Apr pattern of down-up-down probably due to month lengths
+ * 2008 reverses the pattern
+
+# Ex 6
+> Use the the following graphics functions: `autoplot`, `ggseasonplot`, `ggsubseriesplot`, `gglagplot`, `ggAcf` and explore features from the following time series: `hsales`, `usdeaths`, `bricksq`, `sunspotarea`, `gasoline`.
+>
+    + Can you spot any seasonality, cyclicity and trend?
+    + What do you learn about the series?
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(hsales)
+ggseasonplot(hsales)
+ggsubseriesplot(hsales)
+gglagplot(hsales)
+ggAcf(hsales)
+```
+
+  + Seasonality evident in all plots
+  + Cyclicity seen in first two plots
+  + No trend
+  + ACF only shows seasonality. Cycle length too long to show up here.
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(usdeaths)
+ggseasonplot(usdeaths)
+ggsubseriesplot(usdeaths)
+gglagplot(usdeaths)
+ggAcf(usdeaths)
+```
+
+  + Seasonality evident in all plots
+  + No cyclicity or trend
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(bricksq)
+ggseasonplot(bricksq)
+ggsubseriesplot(bricksq)
+gglagplot(bricksq)
+ggAcf(bricksq)
+```
+
+  + Q1 is the lowest and Q3 is the highest.
+  + 1982 and 1983 are unusual, especially the last quarter of 1982 and the first quarter of 1983. This was a recession.
+  + Seasonality weak compared to trend
+  + Cyclicity slightly evident in time plot and subseries plot
+  + positive relationships in lag plot dominated by the strong trend   + ACF only shows seasonality and trend. Cycle length too long to show up here.
+
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(sunspotarea)
+#ggseasonplot(sunspotarea)
+#ggsubseriesplot(sunspotarea)
+gglagplot(sunspotarea)
+ggAcf(sunspotarea)
+```
+
+  + Data is not seasonal data hence we don't run commands for seasonal features.
+  + Cyclicity seen in all plots (cycle length around 10-11)
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(gasoline)
+ggseasonplot(gasoline)
+#ggsubseriesplot(gasoline)
+gglagplot(gasoline)
+ggAcf(gasoline)
+```
+
+  + Seasonality clear in seasonal plot
+  + Non-integer seasonality makes the subseries plot fail
+  + Seasonal length too long for the lagplot to be useful
+  + ACF plot shows the seasonality and trend clearly
+
+# Ex 7
+
+> The `arrivals` data set comprises quarterly international arrivals (in thousands) to Australia from Japan, New Zealand, UK and the US.
+>
+    + Use `autoplot`, `ggseasonplot` and `ggsubseriesplot` to compare the differences between the arrivals from these four countries.
+    + Can you identify any unusual observations?
+
+```{r, echo=TRUE, cache=TRUE}
+autoplot(arrivals) +
+   xlab("Year") + ylab("") +
+   ggtitle("Total quarterly arrivals to Australia")
+```
+```{r}
+autoplot(arrivals, facet=TRUE)
+```
+
+  + The time plots show: a decrease in arrivals from Japan since mid-1990s, an increase in arrivals from NZ, a downturn of arrivals from the UK since mid-2000s and a flattening out of the arrivals from the US.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+seasJap <- ggseasonplot(arrivals[,"Japan"], year.labels=TRUE, year.labels.left=TRUE)+ ylab("")+ggtitle("Japan")
+seasNZ <- ggseasonplot(arrivals[,"NZ"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("New Zealand")
+seasUS <- ggseasonplot(arrivals[,"UK"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("UK")
+seasUK <- ggseasonplot(arrivals[,"US"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("US")
+
+gridExtra::grid.arrange(seasJap,seasNZ,seasUS,seasUK, nrow=2)
+
+subJap <- ggsubseriesplot(arrivals[,"Japan"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("Japan")
+subNZ <- ggsubseriesplot(arrivals[,"NZ"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("New Zealand")
+subUS <- ggsubseriesplot(arrivals[,"UK"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("UK")
+subUK <- ggsubseriesplot(arrivals[,"US"], year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("")+ggtitle("US")
+
+gridExtra::grid.arrange(subJap,subNZ,subUS,subUK, nrow=2)
+```
+
+  + The seasonal plots show the difference in seasonal patterns from the four source countries. The peaks for from UK and the US happen in Q1 and Q4 which include the summer period in Australia, Christmas and New Year's holiday period with  Q2 and Q3 being the troughs.  For Japan peaks occur mostly in Q1 but also Q3 reflecting both peak arrivals in summer but also winter which possibly correspond to winter skying season or visiting northern Australia in during the dry season. The one source country that is very different is New Zealand. Peak arrivals from New Zealand occur during the Q3 followed by Q2 and Q4. Unlike all other source countries, the trough clearly occurs during Q1 the January (summer) quarter. The seasonal plots are also useful, revealing anomalies or one-off events. For example, in the US plot, the peak arrivals for all July quarters occurred in 2000 during the Sydney Olympic games.
+
+  + UK is most seasonal
+  + 2001:Q3-Q4 are unusual for US (9/11 effect)
+  + 1991:Q3 is unusual for US (Gulf war effect?)
+
+
+# Ex 8
+> The following time plots and ACF plots correspond to four different time series. Your task is to match each  time plot in the first row with one of the ACF plots in the second row.
+
+```{r acfguess, fig.asp=0.5, fig.width=12, echo=FALSE, message=FALSE, warning=FALSE}
+tp1 <- autoplot(cowtemp) + xlab("") + ylab("chirps per minute") +
+ ggtitle("1. Daily temperature of cow")
+tp2 <- autoplot(USAccDeaths/1e3) + xlab("") + ylab("thousands") +
+ ggtitle("2. Monthly accidental deaths")
+tp3 <- autoplot(AirPassengers) + xlab("") + ylab("thousands") +
+ ggtitle("3. Monthly air passengers")
+tp4 <- autoplot(mink/1e3) + xlab("") + ylab("thousands") +
+ ggtitle("4. Annual mink trappings")
+acfb <- ggAcf(cowtemp, ci=0) + xlab("") + ggtitle("B") + ylim(-0.4,1)
+acfa <- ggAcf(USAccDeaths, ci=0) + xlab("") + ggtitle("A") + ylim(-0.4,1)
+acfd <- ggAcf(AirPassengers, ci=0) + xlab("") + ggtitle("D") + ylim(-0.4,1)
+acfc <- ggAcf(mink, ci=0) + xlab("") + ggtitle("C") + ylim(-0.4,1)
+gridExtra::grid.arrange(tp1,tp2,tp3,tp4,
+                       acfa,acfb,acfc,acfd,nrow=2)
+```
+
+1-B, 2-A, 3-D, 4-C
+
+
+# Ex 9
+
+> The `pigs` data shows the monthly total number of pigs slaughtered in Victoria, Australia, from Jan 1980 to Aug 1995. Use `mypigs <- window(pigs, start=1990)` to select the data starting from 1990. Use `autoplot` and `ggAcf` for `mypigs` series and compare these to white noise plots from Figures 2.17 and 2.18.
+
+
+```{r, echo=TRUE, cache=TRUE}
+mypigs <- window(pigs, start=1990)
+autoplot(mypigs) +
+   xlab("Year") + ylab("") +
+   ggtitle("Monthly total number of pigs slaughtered in Victoria")
+ggAcf(mypigs)
+```
+
+  + Time plot: Monthly data in thousands. No features really jump out. Maybe a bit of a trend.
+  + The ACF shows significant spikes at lags 1,2 and 3. Also note a large spike at the seasonal lag 12. If we had a longer series with the significance bounds tighter this may have also been significant indicating some seasonality.
+  + Definitely not a white noise series.
+
+# Ex 10
+
+> `dj` contains 292 consecutive trading days of the Dow Jones Index. Use `ddj <- diff(dj)` to compute the daily changes in the index. Plot `ddj` and its ACF. Do the changes in the Dow Jones Index look like white noise?
+
+```{r}
+ddj <- diff(dj)
+autoplot(ddj)
+ggAcf(ddj, lag.max=30)
+```
+
+  + The time plot resembles white noise with no significant patterns jumping out.
+  + The ACF shows a marginally significant spike at lag 6. Remember these are 95% bounds and therefore we expect 5% (approx 1 out of 20) of them to lie outside these bounds. Hence the daily change in the Dow Jones index resembles white noise.

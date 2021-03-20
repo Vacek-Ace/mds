@@ -1,0 +1,563 @@
+---
+title: "Exercise solutions: Section 5.10"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+
+>Daily electricity demand for Victoria, Australia, during 2014 is contained in `elecdaily`. The data for the first 20 days can be obtained as follows.
+
+```{r echo=TRUE, cache=TRUE}
+daily20 <- head(elecdaily,20)
+```
+
+>a. Plot the data and find the regression model for Demand with temperature as an explanatory variable. Why is there a positive relationship?
+
+```{r echo=TRUE, cache=TRUE}
+autoplot(daily20, facets=TRUE)
+daily20 %>% 
+  as.data.frame() %>%
+  ggplot(aes(x = Temperature, y = Demand)) + 
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE)
+(fit <- tslm(Demand ~ Temperature, data = daily20))
+```
+    
+There is a positive relationship between temperature and electricity consumption. 
+    
+Given the time of year, and the recorded temperature values, it is likely that electricity is being used for air conditioners. Since higher temperatures mean a higher demand for cooling, this leads to a positive relationship between temperature and electricity consumption.
+
+> b. Produce a residual plot. Is the model adequate? Are there any outliers or influential observations?
+
+```{r echo=TRUE, cache=TRUE}
+checkresiduals(fit)
+```
+
+Although the ACF tests are passed, there is a linear trend in the residuals. So the model looks inadequate.
+
+>c. Use the model to forecast the electricity demand that you would expect for the next day if the maximum temperature was $15^\circ$ and compare it with the forecast if the with maximum temperature was $35^\circ$. Do you believe these forecasts?
+
+```{r echo=TRUE, cache=TRUE}
+(fc <- forecast(fit, newdata=data.frame(Temperature=c(15,35))))
+```
+
+The prediction for $35^\circ$ looks reasonable, but the one for $15^\circ$ assumes the trend continues to decrease for temperature values lower than 20, which is unlikely. Heating will mean it will increase for lower temperatures.
+
+
+> d. Give prediction intervals for your forecasts. 
+
+See above.
+
+> e. Plot Demand vs Temperature for all of the available data in `elecdaily`. What does this say about your model?
+
+```{r echo=TRUE, cache=TRUE}
+elecdaily %>% 
+  as.data.frame() %>%
+  ggplot(aes(x = Temperature, y = Demand)) + 
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE)
+```
+
+This shows the non-linear relationship clearly. Even limiting the data to above 20, there is a nonlinear relationship between demand and temperature. The model is inadequate.
+
+# Ex 2
+
+> Data set `mens400` contains the winning times (in seconds) for the men's 400 meters final in each Olympic Games from 1896 to 2016.
+
+>  a. Plot the winning time against the year. Describe the main features of the scatterplot.
+
+```{r, warning=FALSE, message=FALSE}
+qplot(time(mens400), mens400)
+```
+
+After an initial outlier, the plot shows linear relationship between **Year** and **time** for years in range from 1900 to about 1976. Data for years from 1980 show a smaller trend.
+
+>b. Fit a regression line to the data. Obviously the winning times have been decreasing, but at what *average* rate per year?
+
+```{r, warning=FALSE, message=FALSE}
+(fit <- tslm(mens400 ~ trend))
+qplot(time(mens400), mens400) +
+  geom_smooth(method='lm')
+```
+
+The average change per year is `r round(coefficients(fit)['trend'], 3)`  second per year.
+
+>c. Plot the residuals against the year. What does this indicate about the suitability of the fitted line?
+
+```{r, warning=FALSE, message=FALSE}
+qplot(time(mens400), residuals(fit)) +
+  geom_hline(yintercept=0, col='grey')
+```
+
+There is an outlier at year 1896 and a change in trend at around 1980 (shown by the positive residuals after that time. So the linear model is not a good choice.
+
+
+>d. Predict the winning time for the men’s 400 meters final in the 2020 Olympics. Give a prediction interval for your forecasts. What assumptions have you made in these calculations?
+
+Unfortunately, a bug in forecast v8.3 meant that `forecast(fit)` gives an error. Here is a workaround.
+
+```{r}
+trend <- time(mens400)
+fit <- lm(mens400 ~ trend)
+forecast(fit, newdata=data.frame(trend=2020))
+```
+
+The above calculations are made with the assumption that the the men’s 400 meters Olympics final results change on average with constant rate.  This is unlikely, especially given the obvious change in slope in the data. The actual winning time is likely to be much higher than what has been forecast.
+
+
+# Ex 3
+
+> Type `easter(ausbeer)` and interpret what you see.
+
+```{r}
+easter(ausbeer)
+```
+
+This gives the proportion of Easter in each quarter. Easter is defined as including Good Friday, Easter Saturday, and Easter Sunday.
+
+# Ex 4
+
+> An elasticity coefficient is the ratio of the percentage change in the forecast variable ($y$) to the percentage change in the predictor variable ($x$). Mathematically, the elasticity is defined as $(dy/dx)\times(x/y)$. Consider the log-log model, 
+>  $$
+> \log y=\beta_0+\beta_1 \log x + \varepsilon.
+> $$ 
+> Express $y$ as a function of $x$ and show that the coefficient $\beta_1$ is the elasticity coefficient.
+
+We will take conditional expectation of the left and the right parts of the equation:
+$$\mathrm{E}(\log(y)\mid x) = \mathrm{E}(\beta_0 + \beta_1 \log(x) + \varepsilon\mid x) = \beta_0 + \beta_1\log(x).$$
+By taking derivatives of the left and the right parts of the last equation we get:
+$\frac{y'}{y} = \frac{\beta_1}{x}$, and then $\beta_1 = \frac{y' x}{y}.$
+It is exactly what we need to prove, taking into account that
+$y' = \frac{dy}{dx}$.
+
+# Ex 5
+
+> The data set `fancy` concerns the monthly sales figures of a shop which opened in January 1987 and sells gifts, souvenirs, and novelties. The shop is situated on the wharf at a beach resort town in Queensland, Australia. The sales volume varies with the seasonal population of tourists. There is a large influx of visitors to the town at Christmas and for the local surfing festival, held every March since 1988. Over time, the shop has expanded its premises, range of products, and staff.
+
+>a. Produce a time plot of the data and describe the patterns in the graph. Identify any unusual or unexpected fluctuations in the time series.
+
+
+```{r}
+autoplot(fancy) +
+  xlab("Year") + ylab("Sales")
+```
+
+Features of the data:
+
+* Seasonal data -- similar scaled pattern repeats every year
+* A spike every March (except for year 1987) is the influence of the surfing festival
+* The size of the pattern increases proportionally to the level of sales
+
+>b. Explain why it is necessary to take logarithms of these data before fitting a model.
+
+The last feature above suggests taking logs to make the pattern (and variance) more stable
+
+```{r}
+# Taking logarithms of the data
+autoplot(log(fancy)) + ylab("log Sales")
+```
+
+After taking logs, the trend looks more linear and the seasonal variation is roughly constant.
+
+>c. Use R to fit a regression model to the logarithms of these sales data with a linear trend, seasonal dummies and a "surfing festival" dummy variable.
+
+
+
+```{r}
+#Create festival dummy:
+festival <- cycle(fancy) == 3
+festival[3] <- FALSE
+
+# Fit linear model to logged data (by specifying lambda=0)
+fit <- tslm(fancy ~ trend + season + festival, lambda = 0)
+
+# Check fitted values
+autoplot(fancy) + ylab("Sales") +
+  autolayer(fitted(fit), series="Fitted")
+```
+
+>d. Plot the residuals against time and against the fitted values. Do these plots reveal any problems with the model?
+
+```{r, message=FALSE}
+autoplot(residuals(fit))
+qplot(fitted(fit), residuals(fit))
+```
+
+The residuals are serially correlated. They reveal nonlinearity in the trend.
+
+There are no problems apparent in graph against fitted values.
+
+
+>e. Do boxplots of the residuals for each month. Does this reveal any problems with the model?
+
+```{r, message=FALSE}
+month <- factor(cycle(residuals(fit)), labels=month.abb)
+ggplot() + geom_boxplot(aes(x=month, y=residuals(fit), group=month))
+```
+
+The boxplot does not reveal any problems except heteroscedasticity.
+
+>f. What do the values of the coefficients tell you about each variable?
+
+```{r}
+coefficients(fit)
+```
+
+* the "(Intercept)" is not interpretable
+* "trend" coefficient shows that with every year logarithm of sales increases on average by `r round(coef(fit)[2], 2)`
+* "season2" coefficient shows that in February logarithm of sales increases compare to January on average by `r round(coef(fit)[3], 2)`
+* ...
+* "season12" coefficient shows that in December logarithm of sales increases compare to January on average by `r round(coef(fit)[13], 2)`
+* "festivalTRUE" coefficient shows that with surfing festival logarithm of sales increases compare to months without the festival on average by `r round(coef(fit)[14], 2)`
+
+
+>g. What does the Breusch-Godfrey test tell you about your model?
+
+```{r}
+checkresiduals(fit)
+```
+
+The serial correlation in the residuals is significant.
+
+
+>h. Regardless of your answers to the above questions, use your regression model to predict the monthly sales for 1994, 1995, and 1996. Produce prediction intervals for each of your forecasts.
+
+```{r}
+future.festival <- rep(FALSE, 36)
+future.festival[c(3, 15, 27)] <- TRUE
+fit %>%
+  forecast(h=36, newdata=data.frame(festival = future.festival)) %>%
+  autoplot
+```
+
+>i. Transform your predictions and intervals to obtain predictions and intervals for the raw data.
+
+This was done automatically because I used `lambda=0` inside `tslm`.
+
+>j. How could you improve these predictions by modifying the model?
+
+
+* The model can be improved by taking into account nonlinearity of the trend.
+
+
+# Ex 6 
+
+> 2. The `gasoline` series consists of weekly data for supplies of US finished motor gasoline product, from 2 February 1991 to 20 January 2017. The units are in "thousand barrels per day". Consider only the data to the end of 2004.
+> a. Fit a harmonic regression with trend to the data. Select the appropriate number of Fourier terms to include by minimizing the AICc or CV value.
+
+```{r}
+gas <- window(gasoline, end=2004.99)
+cv <- numeric(25)
+for(k in seq(25))
+{
+  fit <- tslm(gas ~ trend + fourier(gas, K=k))
+  cv[k] <- CV(fit)['CV']
+}
+k <- which.min(cv)
+fit <- tslm(gas ~ trend + fourier(gas, K=k))
+```
+
+> b. Check the residuals of the final model using the `checkresiduals()` function. Even though the residuals fail the correlation tests, the results are probably not severe enough to make much difference to the forecasts and forecast intervals. (Note that the correlations are relatively small, even though they are significant.)
+
+```{r}
+checkresiduals(fit)
+```
+
+> c. To forecast using harmonic regression, you will need to generate the future values of the Fourier terms. This can be done as follows.
+>
+>   ```r
+>   fc <- forecast(fit, newdata=fourier(x, K, h))
+>   ```
+>
+>    where `fit` is the fitted model using `tslm`, `K` is the number of Fourier terms used in creating `fit`, and `h` is the forecast horizon required.
+>
+>    Forecast the next year of data.
+
+```{r, warning=FALSE}
+fc <- forecast(fit, newdata=data.frame(fourier(gas, k, 52)))
+```
+
+> d. Plot the forecasts along with the actual data for 2005. What do you find?
+
+```{r}
+autoplot(fc) +
+  autolayer(window(gasoline, start=2005, end=2005.99), series="2005 data")
+```
+
+The forecasts look pretty good for the next year.
+
+
+# Ex 7
+
+> Data set `huron` gives the level of Lake Huron in feet from 1875-1972.
+
+>  a. Plot the data and comment on its features. 
+
+```{r echo=TRUE, cache=TRUE}
+autoplot(huron)
+```
+    
+It seems that the water level was going down until around 1915 and then seems to have stabilised indicating a non-linear trend.
+    
+> b. Fit a linear regression and compare this to a piecewise linear trend model with a knot at 1915.
+
+```{r echo=TRUE, cache=TRUE}
+(fit.lin <- tslm(huron ~ trend))
+t <- time(huron)
+tb <- ts(pmax(t-1915, 0))
+(fit.pw <- tslm(huron ~ t + tb))
+```
+
+The two slope parameters almost add to zero, indicating the trend after 1915 is approximately flat.
+
+> c. Generate forecasts from these two models for the period upto 1980 and comment on these.
+
+```{r echo=TRUE, cache=TRUE}
+h <- 8
+fcasts.lin <- forecast(fit.lin, h=h)
+t.new <- t[length(t)] + seq(h)
+tb.new <- tb[length(tb)] + seq(h)
+newdata <- cbind(t=t.new,tb=tb.new) %>% as.data.frame()
+fcasts.pw <- forecast(fit.pw, newdata = newdata)
+
+autoplot(huron) +
+  autolayer(fitted(fit.lin), series = "Linear") +
+  autolayer(fitted(fit.pw), series = "Piecewise") +
+  autolayer(fcasts.lin, series = "Linear") +
+  autolayer(fcasts.pw, series="Piecewise")
+```
+
+The break in the trend in around 1915 seems reasonable. The projections from the piecewise linear trend show the water levels stabilise in contrast to the linear trend which shows a decline. We need to be careful as the projections as the break point is subjectively chosen. 5 years later and we get a different projection with increasing levels.
+
+# Ex 8
+>Using matrix notation it was shown that if $\mathbf{y}=\mathbf{X}\mathbf{\beta}+\mathbf{\varepsilon}$, where $\mathbf{e}$ has mean $\mathbf{0}$ and variance matrix $\sigma^2\mathbf{I}$, the estimated coefficients are given by $\hat{\mathbf{\beta}}=(\mathbf{X}'\mathbf{X})^{-1}\mathbf{X}'\mathbf{y}$ and a forecast is given by $\hat{y}=\mathbf{x}^*\hat{\mathbf{\beta}}=\mathbf{x}^*(\mathbf{X}'\mathbf{X})^{-1}\mathbf{X}'\mathbf{y}$ where $\mathbf{x}^*$ is a row vector containing the values of the regressors for the forecast (in the same format as $\mathbf{X}$), and the forecast variance is given by $var(\hat{y})=\sigma^2 \left[1+\mathbf{x}^*(\mathbf{X}'\mathbf{X})^{-1}(\mathbf{x}^*)'\right].$
+
+>Consider the simple time trend model where $y_t = \beta_0 + \beta_1t$. Using the following results,
+$$
+  \sum^{T}_{t=1}{t}=\frac{1}{2}T(T+1),\quad \sum^{T}_{t=1}{t^2}=\frac{1}{6}T(T+1)(2T+1)
+$$
+derive the following expressions:
+
+> a.
+$\displaystyle\mathbf{X}'\mathbf{X}=\frac{1}{6}\left[
+\begin{array}{cc}
+  6T      & 3T(T+1) \\
+  3T(T+1) & T(T+1)(2T+1) \\
+\end{array}
+\right]$
+
+> b.
+  $\displaystyle(\mathbf{X}'\mathbf{X})^{-1}=\frac{2}{T(T^2-1)}\left[
+  \begin{array}{cc}
+    (T+1)(2T+1)   & -3(T+1) \\
+    -3(T+1)       & 6 \\
+  \end{array}
+  \right]$
+
+>c.
+  $\displaystyle\hat{\beta}_0=\frac{2}{T(T-1)}\left[(2T+1)\sum^T_{t=1}y_t-3\sum^T_{t=1}ty_t
+  \right]$
+
+> $\displaystyle\hat{\beta}_1=\frac{6}{T(T^2-1)}\left[2\sum^T_{t=1}ty_t-(T+1)\sum^T_{t=1}y_t \right]$
+
+>d.
+  $\displaystyle\text{Var}(\hat{y}_{t})=\hat{\sigma}^2\left[1+\frac{2}{T(T-1)}\left(1-4T-6h+6\frac{(T+h)^2}{T+1}\right)\right]$
+
+For a time trend,
+$$
+  \mathbf{X} = \begin{bmatrix}
+   1 & 1 \\
+   1 & 2 \\
+   1 & 3 \\
+   \vdots \\
+   1 & T
+   \end{bmatrix}
+$$
+
+### (a)
+
+&nbsp;
+\begin{align*}
+\mathbf{X}' \mathbf{X}
+& = \begin{bmatrix}
+      1 & 1 & 1 & \dots & 1\\
+      1 & 2 & 3 & \dots & T
+    \end{bmatrix}
+    \begin{bmatrix}
+      1 & 1 \\
+      1 & 2 \\
+      1 & 3 \\
+      \vdots \\
+      1 & T
+    \end{bmatrix} \\
+&= \begin{bmatrix}
+     T & 1 + 2 + 3 + \cdots + T \\
+     1 + 2 + 3 + \cdots + T & 1^2 + 2^2 + 3^2 + \cdots + T^2
+    \end{bmatrix}\\
+&= \begin{bmatrix}
+     T & \frac{1}{2}T(T+1) \\
+     \frac{1}{2}T(T+1) & \frac{1}{6}T(T+1)(2T+1)
+    \end{bmatrix} \\
+&= \frac{1}{6}\begin{bmatrix}
+     6T & 3T(T+1) \\
+     3T(T+1) & T(T+1)(T+1)
+    \end{bmatrix}
+\end{align*}
+
+### (b)
+&nbsp;
+\begin{align*}
+(\mathbf{X}' \mathbf{X} )^{-1}
+&= \frac{6}{(6T)[T(T+1)(2T+1)] - 9T^2(T+1)^2}
+   \begin{bmatrix}
+     T(T+1)(2T+1) & -3T(T+1) \\
+     -3T(T+1) & 6T
+    \end{bmatrix} \\
+&= \frac{6}{6[T(T+1)(2T+1)] - 9T(T+1)^2}
+   \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix} \\
+&= \frac{2}{2T(T+1)(2T+1) - 3T(T+1)^2}
+   \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix} \\
+&= \frac{2}{T(T+1)[2(2T+1) - 3(T+1)]}
+   \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix} \\
+&= \frac{2}{T(T+1)(T-1)}
+   \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix} \\
+&= \frac{2}{T(T^2-1)}
+   \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix} \\
+\end{align*}
+
+### (c)
+&nbsp;
+\begin{align*}
+\mathbf{X}' \mathbf{Y}
+=  \begin{bmatrix}
+      1 & 1 & 1 & \dots & 1\\
+      1 & 2 & 3 & \dots & T
+    \end{bmatrix}\mathbf{Y}
+= \begin{bmatrix}
+     \sum_{i=1}^T Y_i \\
+     \sum_{i=1}^T iY_i
+    \end{bmatrix}
+\end{align*}
+
+Now the first element of
+$$(\mathbf{X}' \mathbf{X} )^{-1} \mathbf{X}' \mathbf{Y} $$
+is
+\begin{align*}
+\hat{a}
+&= \frac{2}{T(T^2-1)}
+     \begin{bmatrix}
+       (T+1)(2T+1) & -3(T+1)
+     \end{bmatrix}
+     \begin{bmatrix}
+       \sum_{i=1}^T Y_i \\
+       \sum_{i=1}^T iY_i
+     \end{bmatrix} \\
+&= \frac{2}{T(T^2-1)}
+   \left[
+     (T+1)(2T+1)\sum_{i=1}^T Y_i -3(T+1) \sum_{i=1}^T iY_i
+   \right] \\
+&= \frac{2(T+1)}{T(T^2-1)}
+   \left[
+     (2T+1)\sum_{i=1}^T Y_i -3 \sum_{i=1}^T iY_i
+   \right] \\
+&= \frac{2}{T(T-1)}
+   \left[
+     (2T+1)\sum_{i=1}^T Y_i -3 \sum_{i=1}^T iY_i
+   \right] .
+\end{align*}
+
+
+The second element of
+$$(\mathbf{X}' \mathbf{X} )^{-1} \mathbf{X}' \mathbf{Y} $$
+is
+\begin{align*}
+\hat{b}
+&= \frac{2}{T(T^2-1)}
+     \begin{bmatrix}
+       -3(T+1) & 6
+     \end{bmatrix}
+     \begin{bmatrix}
+       \sum_{i=1}^T Y_i \\
+       \sum_{i=1}^T iY_i
+     \end{bmatrix} \\
+&= \frac{2}{T(T^2-1)}
+   \left[
+       -3(T+1) \sum_{i=1}^T Y_i + 6 \sum_{i=1}^T iY_i
+   \right] \\
+&= \frac{6}{T(T^2-1)}
+   \left[
+       2 \sum_{i=1}^T iY_i -(T+1) \sum_{i=1}^T Y_i
+   \right]
+\end{align*}
+
+### (d)
+
+Now $\mathbf{X}^* = [1 ~~~ T+h]$. So $\text{Var}(Y^* | \mathbf{Y},\mathbf{X},\mathbf{X}^*)$
+\begin{align*}
+&= \sigma^2\left\{
+    1 + \mathbf{X}^*(\mathbf{X}'\mathbf{X})^{-1}(\mathbf{X}^*)'
+\right\}\\
+&= \sigma^2\left\{
+    1 + \frac{2}{T(T^2-1)}
+    \begin{bmatrix} 1 & T+h \end{bmatrix}
+    \begin{bmatrix}
+     (T+1)(2T+1) & -3(T+1) \\
+     -3(T+1) & 6
+    \end{bmatrix}
+    \begin{bmatrix} 1 \\ T+h \end{bmatrix}
+\right\}\\
+&= \sigma^2\left\{
+    1 + \frac{2}{T(T^2-1)}
+    \begin{bmatrix}
+     (T+1)(2T+1) -3(T+1)(T+h) &
+     -3(T+1) + 6(T+h)
+    \end{bmatrix}
+    \begin{bmatrix} 1 \\ T+h \end{bmatrix}
+\right\}\\
+&= \sigma^2\left\{
+    1 + \frac{2}{T(T^2-1)}
+    \left[
+     (T+1)(2T+1) -3(T+1)(T+h) +
+     -3(T+1)(T+h) + 6(T+h)^2
+     \right]
+    \right\}\\
+&= \sigma^2\left\{
+    1 + \frac{2}{T(T-1)}
+    \left[
+     1 -4T-6h + 6\frac{(T+h)^2}{(T+1)}
+     \right]
+    \right\}.
+\end{align*}
+

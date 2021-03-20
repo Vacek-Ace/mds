@@ -1,0 +1,34 @@
+/* Normal  text*/
+body {
+    font-family: 'Lato', sans-serif;  /*Selected from Google Fonts*/
+    font-size: 16px;
+}
+
+/* Color for anchors */
+a { 
+    color: rgb(233, 84, 32);
+    outline-color: rgb(233, 84, 32);
+    text-decoration-color: rgb(233, 84, 32);
+}
+
+a:hover { 
+    color: rgb(233, 84, 32);
+    outline-color: rgb(233, 84, 32);
+    text-decoration-color: rgb(233, 84, 32);
+}
+
+a:focus { 
+    color: rgb(233, 84, 32);
+    outline-color: rgb(233, 84, 32);
+    text-decoration-color: rgb(233, 84, 32);
+}
+
+h1, .h1 {
+  font-family: 'Lato', sans-serif;  /*Selected from Google Fonts*/
+  margin-top: 40px;
+}
+
+h2, .h2 {
+  font-family: 'Lato', sans-serif;  /*Selected from Google Fonts*/
+  margin-top: 34px;
+}

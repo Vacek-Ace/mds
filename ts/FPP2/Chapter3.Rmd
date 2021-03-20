@@ -1,0 +1,429 @@
+---
+title: "Exercise solutions: Section 3.7"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+
+> For the following series, find an appropriate Box-Cox transformation in order to stabilize the variance.
+
+  * `usnetelec`
+  * `usgdp`
+  * `mcopper`
+  * `enplanements`
+
+```{r}
+autoplot(usnetelec)
+autoplot(usgdp)
+autoplot(mcopper)
+(lambda <- BoxCox.lambda(mcopper))
+mcopper %>% BoxCox(lambda=lambda) %>% autoplot()
+autoplot(enplanements)
+# Here we will just do a log transformation
+enplanements %>% BoxCox(lambda=0) %>% autoplot()
+```
+
+The first two series don't really need a transformation.
+
+# Ex 2
+
+> Why is a Box-Cox transformation unhelpful for the `cangas` data?
+
+```{r}
+autoplot(cangas)
+(lambda <- BoxCox.lambda(cangas))
+cangas  %>% BoxCox(lambda=lambda) %>% autoplot()
+```
+
+Here the variance of the series changes, but not with the level of the series. Box Cox transformations are designed to handle series where the variance increases (or decreases) with the level of the series.
+
+# Ex 3
+
+> What Box-Cox transformation would you select for your retail data (from Exercise 3 in Section 2.10)?
+
+```{r}
+retaildata <- readxl::read_excel("data/retail.xlsx", skip=1)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+autoplot(myts)
+myts %>% BoxCox(lambda = 0) %>% autoplot()
+```
+
+From visual inspection, a log transformation would be appropriate here. It also makes sense, as retail expenditure is likely to increase proportionally to population, and therefore the seasonal fluctuations are likely to be proportional to the level of the series. It has the added advantage of being easier to explain than some other transformations. Finally, it is relatively close to the automatically selected value of `BoxCox.lambda(myts)` $= `r round(BoxCox.lambda(myts),3)`$.
+
+If you have selected a different series from the retail data set, you might choose a different transformation.
+
+# Ex 4
+
+> For each of the following series, make a graph of the data. If transforming seems appropriate, do so and describe the effect. `dole`, `usdeaths`, `bricksq`.
+
+```{r}
+autoplot(dole)
+lambda <- BoxCox.lambda(dole)
+dole %>% BoxCox(lambda) %>%
+autoplot() +
+  ylab(paste("BoxCox(# people,", round(lambda, 2), ")"))
+```
+
+The data was transformed using Box-Cox transformation with parameter $\lambda = `r round(lambda,2)`$. The transformation has stabilized the variance.
+
+```{r}
+autoplot(usdeaths) + ylab("# deaths")
+```
+
+There is no need for a transformation for these data.
+
+```{r}
+autoplot(bricksq)
+lambda <- BoxCox.lambda(bricksq)
+bricksq %>% BoxCox(lambda) %>%
+  autoplot() +
+    ylab(paste("BoxCox(# mln bricks,", round(lambda, 2), ")"))
+```
+
+The time series was transformed using a Box-Cox transformation with $\lambda = `r round(lambda,2)`$. The transformation has stabilized the variance.
+
+# Ex 5
+
+> Calculate the residuals from a seasonal naïve forecast applied to the quarterly Australian beer production data from 1992. The following code will help.
+
+```{r}
+beer <- window(ausbeer, start=1992)
+fc <- snaive(beer)
+autoplot(fc)
+res <- residuals(fc)
+autoplot(res)
+```
+
+Test if the residuals are white noise and normally distributed.
+
+```{r}
+checkresiduals(fc)
+```
+
+What do you conclude?
+
+The residuals are correlated: the Null of no joint autocorrelation is clearly rejected. We can also see a significant spike on the seasonal (3rd lag) in the ACF. There is considerable information remaining in the residuals which has not been captured with the seasonal naïve method. The residuals do not appear to be too far from Normally distributed.
+
+# Ex 6
+
+> Repeat the exercise for the `WWWusage` and `bricksq` data. Use whichever of `naïve` or `snaive` is more appropriate in each case.
+
+```{r}
+WWWusage %>% autoplot()
+fc <- naive(WWWusage)
+res <- residuals(fc)
+autoplot(res)
+checkresiduals(fc)
+```
+
+Residuals are correlated as shown by both the LB test and the ACF. They seem to be normally distributed. There is considerable information remaining in the residuals which has not been captured with the naïve method.
+
+
+```{r}
+bricksq %>% autoplot()
+fc <- snaive(bricksq)
+res <- residuals(fc)
+autoplot(res)
+checkresiduals(fc)
+```
+
+Residuals are correlated as shown by both the LB test and the ACF and do not appear to be normal (they have a long left tail). There is considerable information remaining in the residuals which has not been captured with the seasonal naïve method.
+
+# Ex 7
+
+> Are the following statements true or false? Explain your answer.
+
+> a. Good forecast methods should have normally distributed residuals.
+
+Not true. It is helpful to have normally distributed residuals because it makes the calculation of prediction intervals easier, and it means that least squares estimates of parameters are also equivalent (or close to) maximum likelihood estimates. But it doesn't make the forecasts *better*. If the residuals are not normally-distributed, one way to produce prediction intervals is to use a bootstrapped approach.
+
+> b. A model with small residuals will give good forecasts.
+
+Not true. An over-fitted model will have small residuals (relative to other models), but will probably not give good forecasts.
+
+> c. The best measure of forecast accuracy is MAPE.
+
+Not true. MAPE is useful in some circumstances --- for example, in comparing forecasts on different scales, or with different units, and is relatively easy to understand. But it is not appropriate if the data includes zeros, or if the data has no natural zero.
+
+> d. If your model doesn't forecast well, you should make it more complicated.
+
+Not true. Some things are hard to forecast, and making a model more complicated can make the forecasts worse.
+
+> e. Always choose the model with the best forecast accuracy as measured on the test set.
+
+Not true. Imagine the test set has only a single observation, or a very small number of observations. We don't want to select a model based on a small test set. A better approach is to use time-series cross-validation, which is based on a much larger set of test sets. Later, we will learn about the AIC statistic which is an alternative way to select a model and is often more helpful than a simple test set.
+
+# Ex 8
+
+>  For your retail time series (from Exercise 3 in Section 2.10):
+
+> a. Split the data into two parts using
+
+```{r}
+retaildata <- readxl::read_excel("data/retail.xlsx", skip=1)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+myts.train <- window(myts, end=c(2010,12))
+myts.test <- window(myts, start=2011)
+```
+
+> b. Check that your data have been split appropriately by producing the following plot.
+
+```{r}
+autoplot(myts) +
+  autolayer(myts.train, series="Training") +
+  autolayer(myts.test, series="Test")
+```
+
+> c. Calculate forecasts using `snaive` applied to `myts.train`.
+
+```{r}
+fc <- snaive(myts.train)
+```
+
+> d. Compare the accuracy of your forecasts against the actual values stored in `myts.test`.
+
+```{r}
+  accuracy(fc,myts.test)
+```
+
+The number to look at here is the test set RMSE of 71.443. That provides a benchmark for comparison when we try other models.
+
+> e. Check the residuals. Do the residuals appear to be uncorrelated and normally distributed?
+
+```{r}
+checkresiduals(fc)
+```
+
+The residuals do not look like white noise there are lots of dynamics left over that need to be explored. They do look close to normal although the tails may be too long.
+
+> f. How sensitive are the accuracy measures to the training/test split?
+
+The accuracy measure are always sensitive to this split. There are better ways to check the robustness of the methods in terms of accuracy such as using a rolling window (possible in this case as we have lots of data) or ts.cv.
+
+# Ex 9
+
+>  `visnights` contains quarterly visitor nights (in millions) from 1998-2015 for eight regions of Australia.
+
+> a. Use `window()` to create three training sets for `visnights[,"QLDMetro"],` omitting the last 1, 2 and 3 years; call these train1, train2, and train3, respectively.
+
+```{r}
+train1 <- window(visnights[, "QLDMetro"], end = c(2015, 3))
+train2 <- window(visnights[, "QLDMetro"], end = c(2015, 2))
+train3 <- window(visnights[, "QLDMetro"], end = c(2015, 1))
+```
+
+>  b. Compute one year of forecasts for each training set using the `snaive()` method. Call these `fc1`, `fc2` and `fc3`, respectively.
+
+```{r}
+fc1 <- snaive(train1)
+fc2 <- snaive(train2)
+fc3 <- snaive(train3)
+```
+> c. Use `accuracy()` to compare the MAPE over the three test sets. Comment on these.
+
+First we will copy the actual data into a variable. Then we can do an accuracy comparison.
+
+```{r}
+qld <- visnights[, "QLDMetro"]
+accuracy(fc1,qld)
+accuracy(fc2,qld)
+accuracy(fc3,qld)
+```
+
+This should give similar results to this consolidated results table.
+
+```
+                     ME     RMSE      MAE        MPE     MAPE      MASE       ACF1
+Training set  0.1637836 1.742687 1.360271  0.4384347 7.357322 1.0000000 0.06643175
+Test set fc1 -1.3010774 1.301077 1.301077 -6.9956861 6.995686 0.9564839         NA
+Test set fc2 0.08383478 1.387447 1.384912 -0.4063445 6.589342 1.019346 -0.50000000
+Test set fc3 0.06202858 1.132896 0.9294135 -0.237857 4.425934 0.6738562 -0.51548610
+```
+
+The lower MAPE value for "fc3" indicates a better result when we use the previous 3 values for the `snaive()` prediction.
+
+# Ex 10
+
+> Use the Dow Jones index (data set `dowjones`) to do the following:
+
+>  a.  Produce a time plot of the series.
+
+```{r}
+autoplot(dowjones)
+```
+
+> b.  Produce forecasts using the drift method and plot them.
+
+Let's assume we want to forecast the next 5, 10 and 15 values.
+
+```{r}
+dowfc1 <- rwf(dowjones, drift=TRUE, h=5)
+dowfc2 <- rwf(dowjones, drift=TRUE, h=10)
+dowfc3 <- rwf(dowjones, drift=TRUE, h=15)
+```
+
+Then we can plot these values.
+
+```{r}
+autoplot(dowjones) +
+  autolayer(dowfc1, PI=FALSE, series="Drift 5") +
+  autolayer(dowfc2, PI=FALSE, series="Drift 10") +
+  autolayer(dowfc3, PI=FALSE, series="Drift 15") +
+  xlab("Time") + ylab("Closing Price (US$)") +
+  ggtitle("Dow Jones index") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+> c.  Show that the forecasts are identical to extending the line drawn between the first and last observations.
+
+We can plot the forecasts in a different order, so the shorter forecasts are superimposed, showing the lines are the same.
+
+```{r}
+autoplot(dowjones) +
+  autolayer(dowfc3, PI=FALSE, series="Drift 15") +
+  autolayer(dowfc2, PI=FALSE, series="Drift 10") +
+  autolayer(dowfc1, PI=FALSE, series="Drift 5") +
+  xlab("Time") + ylab("Closing Price (US$)") +
+  ggtitle("Dow Jones index") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+> d.  Try using some of the other benchmark functions to forecast the same data set. Which do you think is best? Why?
+
+The time series isn't seasonal, so the seasonal naïve method is not viable. However, we can use the mean and naïve methods.
+
+```{r}
+dowfc1 <- meanf(dowjones, h=5)
+dowfc2 <- rwf(dowjones, h=5)
+dowfc3 <- rwf(dowjones, drift=TRUE, h=5)
+autoplot(dowjones) +
+  autolayer(dowfc1, PI=FALSE, series="Mean") +
+  autolayer(dowfc2, PI=FALSE, series="Naïve") +
+  autolayer(dowfc3, PI=FALSE, series="Drift") +
+  xlab("Time") + ylab("Closing Price (US$)") +
+  ggtitle("Dow Jones index") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+The three values will be very different here. The Mean will use the data set, so is unlikely to follow the current trendline.
+
+# Ex 11
+> Consider the daily closing IBM stock prices (data set `ibmclose`).
+
+> a. Produce some plots of the data in order to become familiar with it.
+
+```{r}
+autoplot(ibmclose) + ylab("Value $")
+```
+
+> b.  Split the data into a training set of 300 observations and a test set of 69 observations.
+
+```{r}
+ibm.train <- window(ibmclose, end=300)
+ibm.test <- window(ibmclose, start=301)
+autoplot(ibmclose) +
+  autolayer(ibm.train, series="Training") +
+  autolayer(ibm.test, series="Test")
+```
+
+> c.  Try using various benchmark methods to forecast the training set and compare the results on the test set. Which method did best?
+
+```{r}
+h <- length(ibm.test)
+m.f <- meanf(ibm.train, h=h)
+rw.f <- rwf(ibm.train, h=h)
+rwd.f <- rwf(ibm.train, drift=TRUE, h=h)
+
+autoplot(ibmclose) +
+  xlab("Day") +
+  ggtitle("Daily closing IBM stock prices") +
+  autolayer(m.f$mean, col=2, series="Mean method") +
+  autolayer(rw.f$mean, col=3, series="Naïve method") +
+  autolayer(rwd.f$mean, col=4, series="Drift method")
+
+accuracy(m.f,ibm.test)
+accuracy(rw.f,ibm.test)
+accuracy(rwd.f,ibm.test)
+```
+
+In terms of accuracy measures on the test set, the drift method does better.
+
+> d. Check the residuals of your preferred method. Do they resemble white noise?
+
+```{r}
+checkresiduals(rwd.f)
+Box.test(residuals(rwd.f), type="Lj",lag = 10, fitdf=1)
+```
+
+Residuals look relatively uncorrelated, but the distribution is not normal (tails too long).
+
+# Ex 12
+
+> Consider the sales of new one-family houses in the USA, Jan 1973 -- Nov 1995 (data set `hsales`).
+
+> a. Produce some plots of the data in order to become familiar with it.
+
+```{r}
+autoplot(hsales) + ylab("Sales")
+```
+
+> b.  Split the `hsales` data set into a training set and a test set, where the test set is the last two years of data.
+
+```{r}
+hsales.train = window(hsales, end=c(1993,11))
+hsales.test = window(hsales, start=c(1993,12))
+
+autoplot(hsales) +
+  autolayer(hsales.train, series="Training") +
+  autolayer(hsales.test, series="Test")
+```
+
+> c.  Try using various benchmark methods to forecast the training set and compare the results on the test set. Which method did best?
+
+```{r}
+h <- length(hsales.test)
+m.f <- meanf(hsales.train, h=h)
+rw.f <- rwf(hsales.train, h=h)
+sn.f <- snaive(hsales.train, h=h)
+rwd.f <- rwf(hsales.train, drift=TRUE, h=h)
+
+autoplot(hsales) +
+  xlab("Year") +
+  ggtitle("Sales") +
+  autolayer(m.f$mean, col=2, series="Mean method") +
+  autolayer(rw.f$mean, col=3, series="Naïve method") +
+  autolayer(sn.f$mean, col=4, series="Seasonal naïve method") +
+  autolayer(rwd.f$mean, col=5, series="Drift method")
+
+accuracy(m.f,hsales.test)
+accuracy(rw.f,hsales.test)
+accuracy(sn.f,hsales.test)
+accuracy(rwd.f,hsales.test)
+```
+
+In terms of accuracy measures on the test set, the seasonal naïve method does better.
+
+> d. Check the residuals of your preferred method. Do they resemble white noise?
+
+```{r}
+checkresiduals(sn.f)
+```
+
+Residuals are correlated. They show some cyclic behaviour. They seem normal.

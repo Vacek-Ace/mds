@@ -1,0 +1,90 @@
+---
+title: "Exercise solutions: Section 11.5"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+> Use the `tbats()` function to model your retail time series.
+
+```{r retail}
+retaildata <- readxl::read_excel("data/retail.xlsx", skip=1)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+(fit <- tbats(myts))
+```
+
+> a. Check the residuals and produce forecasts.
+
+```{r}
+checkresiduals(fit)
+```
+
+There is still significant seasonal autocorrelation left in the residuals.
+
+```{r}
+fit %>% forecast() %>% autoplot()
+```
+
+The forecasts look ok, although the prediction intervals are probably too narrow.
+
+>  b. Does this completely automated approach work for these data?
+
+Not too bad, but the remaining serial correlation is a problem.
+
+> c. Have you saved any degrees of freedom by using Fourier terms rather than seasonal differencing?
+
+$5\times2=10$ degrees of freedom have been used on the Fourier terms, plus the two gamma values gives 12 degrees of freedom in total. So this approach hasn't saved any degrees of freedom.
+
+
+# Ex 2
+> Consider the weekly data on US finished motor gasoline products supplied (millions of barrels per day) (series `gasoline`):
+
+> a. Fit a TBATS model to these data.
+
+```{r}
+(fit <- tbats(gasoline))
+```
+
+> b. Check the residuals and produce forecasts.
+
+
+```{r}
+checkresiduals(fit)
+```
+
+There is a great deal of significant autocorrelation spikes, but they are all very tiny, so will hardly affect the forecasts.
+
+```{r}
+fit %>% forecast() %>% autoplot()
+```
+
+> c. Could you model these data using any of the other methods we have considered in this book?
+
+A harmonic dynamic regression could also have been used. But all other methods assume an integer seasonal period.
+
+# Ex 3
+> Experiment with using `nnetar()` on your retail data and other data we have considered in previous chapters.
+
+```{r, dependson='retail'}
+myts %>% nnetar() %>% forecast(h=48) %>% autoplot()
+```
+
+Oh dear, that is dreadful. Neural network models do not work well when there is trend in the data.
+
+

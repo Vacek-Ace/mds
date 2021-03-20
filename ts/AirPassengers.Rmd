@@ -1,0 +1,334 @@
+---
+title: "Estimación del número de pasajeros de aerolíneas internacionales"
+author: "DataScienceLab"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    code_folding: show
+    css: styles.css
+    df_print: paged
+    fig_caption: yes
+    fig_height: 8
+    fig_width: 12
+    includes:
+      in_header: google-font.html
+    number_sections: yes
+    theme: flatly
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+for (package in c("tidyverse","fpp3", "GGally", "normtest")) {
+    if (!require(package, character.only=T, quietly=T)) {
+        install.packages(package)
+        library(package, character.only=T)
+    }
+}
+
+my_t_test <- function (object, ...) 
+{
+  par <- rbind(t_stat=tidy(object)$statistic, p_value=tidy(object)$p.value)
+  colnames(par) <- tidy(object)$term
+  if (NCOL(par) > 0) {
+    cat("\nt-test:\n")
+    coef <- round(par, digits = 4)
+    print.default(coef, print.gap = 2)
+  }
+}
+
+my_tsresiduals <- function (data, ...) {
+  if (!fabletools::is_mable(data)) {
+    abort("gg_tsresiduals() must be used with a mable containing only one model.")
+  }
+  data <- stats::residuals(data)
+  if (n_keys(data) > 1) {
+    abort("gg_tsresiduals() must be used with a mable containing only one model.")
+  }
+  gg_tsdisplay(data, !!sym(".resid"), plot_type = "partial",  
+    ...)
+}
+```
+
+# División train y test
+
+Antes de empezar a hacer el estudio hay que distinguir la parte de los datos que se utilizará para construir la fórmula (para modelizar) de aquella que se utilizará para validar los resultados y cuyos datos, no deben ser utilizados.
+
+Convertimos la serie en un objeto **tsibble**, para trabajar de manera cómoda. Analizamos visualmente la serie y las marcas de tiempo para saber cómo dividir los datos.
+
+```{r}
+air = as_tsibble(AirPassengers, index = date)
+air$index
+air %>%
+  autoplot(value) +
+    labs(title = "Monthly totals of international airline passengers") +
+    xlab("Year") + ylab("passengers") 
+```
+
+Dado que tenemos datos mensuales y parece existir a simplevista un patrón estacional anual, reservamos los dos últimos años para test y el resto para train.
+
+```{r}
+air_train <- air %>% filter_index(. ~ "1959-12")
+air_test <- air %>% filter_index(1960 ~ .)
+```
+
+# Fase de identificación
+
+Se comienza la fase de identificación donde se deciden las transformaciones a realizar y el propio ajuste de la serie. Aunque veremos que cuando se realiza la selección de los parámetros del modelo ARIMA, la iteración con la estimación y el contraste son constantes hasta converger a un modelo válido.
+
+## Estacionariedad
+Antes de analizar la serie mediante test estadísticos, analicemos gráficamente más en detalle, para confirmar la estacionalidad detectada.
+
+```{r}
+air_train %>%
+gg_season(value, labels = "right")
+```
+
+Parece claro mediante este gráfico que hay una componente estacional anual, dado que la forma de las series anuales son iguales. Además, se observa que el valor aumenta cada año por lo que parece que tampoco es estable en media.
+
+Dadas las características de la serie, también podemos calcular la descomposición SEATS para corroborar que existe tendencia y estacionalidad.
+
+```{r}
+air_train %>%
+   model(seats = feasts:::SEATS(value)) %>%
+  components() %>%
+  autoplot()
+```
+
+
+### Estacionariedad en varianza {-}
+
+Analicemos qué transformación Box-Cox puede aplicarse para estabilizar la varianza.
+
+```{r}
+lambda <- air_train %>%
+features(value, features = guerrero) %>% pull(lambda_guerrero)
+lambda
+```
+
+Dado que es un valor muy próximo a 0, realizaremos un logaritmo a la serie.
+
+```{r}
+air_train %>% autoplot(log(value)) +
+labs(y = "Log transformed")
+```
+
+### Estacionariedad en media {-}
+
+Es evidente que se necesita realizar al menos una diferencia para estabilizar la media. Esto se puede comprobar mediante una prueba de raices unitarias.
+
+```{r}
+air_train %>%
+  features(log(value), unitroot_kpss)
+```
+
+El p-valor es menor que 0.05, lo que indica que la hipótesis nula es rechazada. Es decir, los datos no son estacionarios. Se confirma formalmente que los datos no son estacionarios. 
+
+```{r}
+air_train %>%
+  features(difference(log(value), 1), unitroot_kpss)
+```
+
+La serie ya pasa el test, por tanto se puede concluir que hay que realizar una diferencia regular.
+
+```{r, warning=FALSE}
+air_train %>% autoplot(difference(log(value), 1)) 
+```
+
+Debido a la estacionalidad de los datos, quizá deba realizarse una diferencia estacional. Para evaluarlo podemos recurrir a la función **unitroot_nsdiffs()**, esta evalúa el estadístico fuerza estacional $F_S$ y sugiere una diferencia estacional si esta es mayor que 0.64.
+
+```{r}
+air_train %>%
+  mutate(log_turnover = difference(log(value),1)) %>%
+  features(log_turnover, unitroot_nsdiffs)
+```
+
+Efectivamente, el método sugiere una diferencia estacional como habíamos sospechado.
+
+## Determinación del modelo
+
+En los pasos previos hemos detectado la necesidad de realizar una transformación logaritmo, una diferencia regular y otra estacional. Por tanto, comenzaremos con el ajuste de un modelo SARIMA (0,1,0)x(0,1,0)$_{12}$, sobre el logaritmo de la serie.
+
+```{r}
+fit <- air_train %>%
+  model(arima = ARIMA(log(value) ~ pdq(0,1,0) + PDQ(0,1,0)))
+fit %>% my_tsresiduals(lag_max =36)
+```
+
+En ambos gráficos de autocorrelaciones se aprecia que el primer pico sobresale de las bandas en ambos casos y el que más sobresale es el 12. Además, se observan decrecimientos estacionales en el PACF, por lo que se puede intuir una AR($\inf$) que sugiere ajustar un MA finito estacional. 
+
+
+# Fase de estimación y contraste
+
+Comencemos ajustando la parte regular mediante un SARIMA (0,1,1)x(0,1,0)$_{12}$
+```{r}
+fit2 <- air_train %>%
+  model(arima = ARIMA(log(value) ~ pdq(0,1,1) + PDQ(0,1,0)))
+fit2 %>% my_tsresiduals(lag_max =36)
+```
+
+Muchos de los picos quedan dentro de las bandas, pero parece que va a ser necesario un ajuste de la parte estacional como observamos en la fase previa.
+
+Comprobemos ahora la calidad estadística de este modelo.
+
+```{r}
+report(fit2)
+my_t_test(fit2)
+gg_arma(fit2)
+```
+
+Hemos comprobado que los parámetros de este modelo son significativos y no existen problemas de invertivilidad. Dado que las gráficas de autocorrelaciones determinan que aún hay partes sin explicar, no evaluaremos los residuos.
+
+Ajustamos ahora la parte estacional que nos falta, utilizando un SARIMA (0,1,1)x(0,1,1)$_{12}$
+
+```{r}
+fit3 <- air_train %>%
+  model(arima = ARIMA(log(value) ~ pdq(0,1,1) + PDQ(0,1,1)))
+fit3 %>% my_tsresiduals(lag_max =36)
+```
+
+La mayoría de los picos están dentro de las bandas, sólo uno se sale. Dado que estamos viendo 36 retardos, si se salieran hasta dos no sería significativo.
+
+Comprobemos la calidad estadística de este nuevo modelo.
+
+```{r}
+report(fit3)
+my_t_test(fit3)
+```
+
+Vemos que de nuevo todos los parámetros son significativos. Otra forma de evaluar si hay problemas con la invertibilidad es comprobar si el valor estimado del parámetro $\pm$ el error estándar, en valor absoluto, continene al 1. Por tanto, en este caso no hay problemas con la significatividad de los parámetros ni con la condición de invertibilidad.
+
+## Diagnosis de residuos
+
+Para completar la fase de contraste evluamos los residuos. Veamos primero el histograma.
+
+```{r}
+aug <-fit3 %>% augment()
+
+# Histogram
+aug %>%
+  ggplot(aes(x = .resid)) +
+  geom_histogram(bins = 50) +
+  ggtitle("Histogram of residuals")
+```
+
+### Test media = 0 {-}
+
+Parece que la media es cero, pero distan bastante de la normalidad a priori. Procedemos a realizar un contraste t-student para contrastar si la media es 0.
+```{r}
+# Student's t-Test for mean=0
+t.test(aug$.resid)
+```
+
+Como *p-value* > 0.05 no podemos rechazar la hipótesis de que la muestra tiene media 0.
+
+### Test autocorrelaciones {-}
+
+A continuación comprobamos que los residuos están incorrelados.
+
+```{r}
+# Ljung-Box autocorrelation lag=2*m
+aug %>% features(.resid, ljung_box, lag=24, dof=2)
+```
+```{r}
+resid_corr <- function(modelo, dof_modelo, estacionalidad, show_pvals = TRUE){
+  pvals <- c()
+  for (lag_i in seq(1, 2*estacionalidad)) {
+    pormateau_i <- modelo %>% features(.resid, ljung_box, lag = lag_i, dof = dof_modelo)
+    pvals <- c(pvals, pormateau_i$lb_pvalue)
+    
+  }
+  if (show_pvals) {
+    plot(pvals)
+     abline(0.05, 0)
+  }
+  
+  return(pvals)
+}
+
+pvals = resid_corr(aug, 2, 12)
+
+pvals
+```
+
+Los resultados no son significativos (es decir, el *p-valor* es relativamente grande). Por lo tanto, podemos concluir que los residuos no están correlados.
+
+### Test homocedasticidad {-}
+
+Para contrastar la heterocedasticidad se puede utilizamos una regersión media-dispersión. Calculando los grupos de manera anual, dado que esa es la estacionalidad de la serie.
+
+```{r}
+
+log_log <- aug %>% as_tibble() %>% 
+  group_by(year(index)) %>% 
+  summarize(mean_resid = log(mean(.resid+1)), std_resid = log(sd(.resid+1))) 
+  
+  summary(lm(std_resid~mean_resid, log_log))
+```
+Como el *p-valor* de *log(media)* es grande, entonces puede considerarse 0 y por tanto los residuos son homocedásticos. 
+
+### Test de normalidad {-}
+
+Para contrastar la normalidad realizamos el test Jarque-Bera para evaluar la normalidad.
+
+```{r}
+# Jarque Bera test
+jb.norm.test(na.omit(aug$.resid))
+```
+
+Como el *p-valor* es menor que el nivel de significancia 0.05, se rechaza la hipótsis nula de normalidad de los resíduos como habíamos supuesto por el histograma.
+
+# Fase de predicción
+
+Finalmente evaluamos la capacidad predictiva del modelo. Calculamos las predicciones en el conjunto de test, calculamos sus errores y los comparamos con los residuos. 
+
+```{r}
+# Residual accuracy
+resids <- fit3 %>% 
+  accuracy() %>% 
+  select(-c(.model, .type, ME, MPE, ACF1 )) %>% 
+  mutate(Evaluation='Training') 
+
+# Forecasting
+fc <- fit3 %>%
+  forecast(h=12) 
+
+test_err <- fc %>% 
+  accuracy(air) %>% 
+  select(-c(.model, .type, ME, MPE, ACF1 )) %>% 
+  mutate(Evaluation='Test')
+
+# Show errors together
+bind_rows(test_err, resids) %>% select(Evaluation, everything())
+
+
+```
+
+Además de evaluar los errores con estas medidas globales, podemos evaluar los errores cometidos año a año visualmente. Así, podemos detectar outliers o efectos de calendario no detectados. Pudiendo así corregirlos con modelos más complejos mediante variables exógenas.
+
+```{r}
+
+aug %>%  ggplot() +
+  geom_line(aes(x = index, y = .fitted), color="navy") +
+  geom_line(aes(x = index, y = value), color="gray24") +
+  # geom_line(data=air_forecast, aes(x = index, y = value), color="red4") +
+  ggtitle("SARIMA train fitted values") +
+  xlab('Dates') +
+  ylab('Passengers') + facet_wrap(vars(year(index)), scales = 'free')
+
+```
+
+También podemos dibujar las predicciones con los intervalos de confianza (aunque en este caso no sean representativos, dada la no normalidad de los residuos). Evaluamos así también la capacidad de generalización del modelo, comparando las predicciones con el conjunto de test.
+
+```{r}
+fit3 %>%
+  forecast(h=12) %>%
+  autoplot(air)
+```
+

@@ -1,0 +1,279 @@
+---
+title: "Exercise solutions: Section 10.8"
+author: "Rob J Hyndman and George Athanasopoulos"
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 8
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    number_sections: false
+    theme: readable
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+library(fpp2)
+options(digits=5)
+```
+
+# Ex 1
+> Write out the $\mathbf{S}$ matrices for the Australian tourism hierarchy and the Australian prison grouped structure. Use the `smatrix` command to verify your answers.
+
+## Tourism hierarchy
+
+The $\mathbf{S}$ matrix is
+$$\begin{bmatrix}
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 \\
+1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 \\
+1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+\end{bmatrix}
+$$
+
+The bottom level series correspond to the 20 zones. The first row of this matrix simply sums them. Rows 2--7 correspond to the six states, summing the appropriate zones in each case. The remaining rows form an identity matrix.
+
+```{r ex1a}
+library(hts)
+tourism.hts <- hts(visnights, characters = c(3, 5))
+smatrix(tourism.hts)
+```
+
+## Prison structure
+
+The $\mathbf{S}$ matrix is
+$$\begin{bmatrix}
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 \\
+1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 \\
+1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 \\
+0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 0 0 1 1 \\
+1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 \\
+0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 \\
+1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 \\
+1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 \\
+1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 \\
+0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 \\
+0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 \\
+0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 \\
+1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 \\
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+\end{bmatrix}
+$$
+
+There are $8\times2\times2=32$ series at the bottom level (combinations of 8 states, 2 genders and 2 legal statuses).  The first row of this matrix simply sums them. Rows 2--9 correspond to the eight states, summing the appropriate bottom level series in each case. Rows 10--11 sum the genders, while Rows 12--13 sum the legal statuses. Next comes the state-gender combinations (summing over legal status), then state-legal combinations (summaring over gender). Finall, we have the identity matrix for the bottom level series.
+
+
+```{r ex1b}
+prison.gts <- gts(prison/1e3, characters = c(3,1,9),
+ gnames = c("State", "Gender", "Legal",
+  "State*Gender", "State*Legal",
+  "State*Gender*Legal"))
+smatrix(prison.gts)
+```
+
+# Ex 2
+> Generate 8-step-ahead bottom-up forecasts using ARIMA models for the `visnights` Australian domestic tourism data. Plot the coherent forecasts by level and comment on their nature. Are you satisfied with these forecasts?
+
+```{r ex2, warning=FALSE, message=FALSE}
+tourism.hts <- hts(visnights, characters = c(3, 5))
+visnightsfc <- forecast(tourism.hts, method='bu', fmethod='arima', h=8)
+```
+
+```{r ex20, warning=FALSE, message=FALSE, dependson='ex2'}
+autoplot(aggts(tourism.hts, level=0)) +
+  autolayer(aggts(visnightsfc, level=0), lty=2)
+```
+
+```{r ex21, warning=FALSE, message=FALSE, dependson='ex2'}
+autoplot(aggts(tourism.hts, level=1)) +
+  autolayer(aggts(visnightsfc, level=1), lty=2)
+```
+
+```{r ex22, warning=FALSE, message=FALSE, dependson='ex2'}
+autoplot(aggts(tourism.hts, level=2)) +
+  autolayer(aggts(visnightsfc, level=2), lty=2)
+```
+
+The forecasts look too low for the Total and NSW. It seems that the bottom-up forecasts miss the strong trend after 2010 observed for some series. For most other states and the zones, the trends and seasonality have been captured and the forecasts look believable.
+
+Below we further explore the forecasts for the largest 4 states.
+
+```{r ex211rjh, dependson='ex2', warning=FALSE, message=FALSE}
+states <- c("NSW","QLD","VIC","WAU")
+autoplot(aggts(tourism.hts, level=1)[,states],facets=TRUE) +
+  autolayer(aggts(visnightsfc, level=1)[,states]) +
+  guides(color=FALSE)
+```
+
+# Ex 3
+> Model the aggregate series for Australian domestic tourism data `visnights` using an ARIMA model. Comment on the model. Generate and plot 8-step-ahead forecasts from the ARIMA model and compare these with the bottom-up forecasts generated in question 2 for the aggregate level.
+
+```{r ex3, dependson='ex2'}
+tourism.hts <- hts(visnights, characters = c(3, 5))
+totals <- aggts(tourism.hts, level=0)[,1L]
+fit <- auto.arima(totals)
+fc <- forecast(fit, h=8)
+autoplot(fc) +
+  autolayer(aggts(visnightsfc, level=0), series="bottom-up")
+```
+
+The bottom-up forecasts are much lower, and given the increasing trend at the end of the series, the forecasts based on the aggregate series look much better.
+
+# Ex 4
+> Generate 8-step-ahead optimally reconciled coherent forecasts using ARIMA base forecasts for the `visnights` Australian domestic tourism data. Plot the coherent forecasts by level and comment on their nature. How and why are these different to the bottom-up forecasts generated in question 2 above.
+
+```{r ex4, warning=FALSE, message=FALSE}
+tourism.hts <- hts(visnights, characters = c(3, 5))
+visnightsfc2 <- forecast(tourism.hts, fmethod='arima', h=8)
+```
+
+```{r ex40, warning=FALSE, message=FALSE, dependson='ex4'}
+autoplot(aggts(visnightsfc2, level=0)) +
+  autolayer(aggts(visnightsfc, level=0), lty=2)
+```
+
+```{r ex41, warning=FALSE, message=FALSE, dependson='ex4'}
+autoplot(aggts(visnightsfc2, level=1)) +
+  autolayer(aggts(visnightsfc, level=1), lty=2)
+```
+
+```{r ex42, warning=FALSE, message=FALSE, dependson='ex4'}
+autoplot(aggts(visnightsfc2, level=2)) +
+  autolayer(aggts(visnightsfc, level=2), lty=2)
+```
+
+All of the bottom-up forecasts are lower than the reconciled forecasts. Because the trends are relatively weak at the zone level, they have not been captured by the models used by the bottom-up approach. When these are added up, the problem becomes obvious. Using the reconciliation approach, the trends are captured at the upper levels, and then the lower forecasts are adjusted accordingly.
+
+# Ex 5
+> Using the last two years of the `visnights` Australian domestic tourism data as a test set, generate bottom-up, top-down and optimally reconciled forecasts for this period and compare their accuracy.
+
+
+```{r ex5, warning=FALSE, message=FALSE, dependson='ex2'}
+tourism.hts <- hts(visnights, characters = c(3, 5))
+train <- window(tourism.hts, end=c(2014,4))
+visnightsfc_bu <- forecast(tourism.hts, fmethod='arima', h=8, method="bu")
+visnightsfc_td <- forecast(tourism.hts, fmethod='arima', h=8, method="tdfp")
+visnightsfc_opt <- forecast(tourism.hts, fmethod='arima', h=8, method="comb")
+```
+
+```{r ex5b, warning=FALSE, message=FALSE, dependson='ex5'}
+test <- window(tourism.hts, start=2015)
+acc <- cbind(
+`Bottom-up` = accuracy(visnightsfc_bu, test)["RMSE",],
+`Top-down` = accuracy(visnightsfc_td, test)["RMSE",],
+`Reconciled` = accuracy(visnightsfc_opt, test)["RMSE",])
+# Level 0
+acc[1,]
+# Level 1
+colMeans(acc[2:7,])
+# Level 2
+colMeans(acc[8:27,])
+```
+
+In this case, the reconciled method is best for the top-level, but the bottom-up method is more accurate, on average, for the zones and states.
+
+Looking more closely at the states:
+
+```{r ex5c}
+acc[2:7,]
+```
+
+we see that the reconciled method is better for South Australia and Queensland,  bottom-up is better for NSW, Victoria and Western Australia, while top-down is better for "Other".
+
+
+
+
+
