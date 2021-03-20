@@ -1,0 +1,45 @@
+
+    
+# add the top header 
+- header: SHapley Additive exPlanations
+
+# add the 'about.md' section at the top 
+- url: /features/Intro
+  not_numbered: true
+
+# ad a divider: a divider is just a black line separating sections. It is just aesthetics.
+- divider: true
+
+# add a second header
+- header: Contents
+
+# add the first notebook
+- url: /features/Potencia
+  not_numbered: true
+
+# add the second notebook
+- url: /features/Formula1
+  not_numbered: true
+ 
+# add the third notebook
+- url: /features/Formula2
+  not_numbered: true
+  
+# add the third notebook
+- url: /features/Formula3
+  not_numbered: true
+  
+# add the third notebook
+- url: /features/Ejemplo
+  not_numbered: true
+  
+# add the third notebook
+- url: /features/Referencias
+  not_numbered: true
+  
+# another divider
+- divider: true
+
+# add the LICENSE 
+- url: /LICENSE
+  not_numbered: true
