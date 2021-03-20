@@ -226,7 +226,7 @@ fit <- demandaGas_train %>%
 fit %>% my_tsresiduals(lag_max = 36)
 ```
 
-El nuevo gráfico acf corresponde a un AR(7). Se aprecia estructura multiplicativa. Es decir, un AR(1) estacional de periodo 7.
+El nuevo gráfico pacf corresponde a un AR(7). Se aprecia estructura multiplicativa. Es decir, un AR(1) estacional de periodo 7.
 
 
 # Fase de estimación y contraste

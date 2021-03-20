@@ -1288,9 +1288,9 @@ fit %>% forecast(h=12) %>% autoplot(eu_retail)
 
 Los pasos principales en el proceso de ajuste de una serie temporal son:
 
- 1.- Hacer estacionaria la serie
- 2.- Identificar los órdenes del proceso ARMA subyacente bajo la serie estacionaria.
- 3.- Contrastar que el proceso residual resultante tras el ajuste es ruido blanco.
+ 1. Hacer estacionaria la serie.
+ 2. Identificar los órdenes del proceso ARMA subyacente bajo la serie estacionaria.
+ 3. Contrastar que el proceso residual resultante tras el ajuste es ruido blanco.
  
 Estos pasos constituyen la esencia de la metodología Box-Jenkins para el ajuste de series temporales, que detallamos en el siguiente diagrama.
 
